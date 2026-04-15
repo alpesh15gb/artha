@@ -1,0 +1,23 @@
+{
+  "name": "artha-cloud-accounting",
+  "version": "1.0.0",
+  "description": "Cloud accounting app for Indian businesses - Vyapar Cloud Edition",
+  "private": true,
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "npm run dev --workspace=server",
+    "dev:client": "npm run dev --workspace=client",
+    "build": "npm run build --workspace=server && npm run build --workspace=client",
+    "start": "docker-compose up -d",
+    "db:migrate": "npm run db:migrate --workspace=server",
+    "db:seed": "npm run db:seed --workspace=server",
+    "import:vyapar": "node import-tools/vyapar-import.js"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

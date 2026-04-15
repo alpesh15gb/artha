@@ -1,0 +1,1 @@
+INSERT INTO "User" (id, email, password, name, role, created_at, updated_at) VALUES ('admin-001', 'admin@artha.com', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYqJfZigWOS', 'Admin', 'ADMIN', NOW(), NOW()) ON CONFLICT DO NOTHING;

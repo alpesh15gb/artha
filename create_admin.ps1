@@ -1,0 +1,1 @@
+docker exec artha-db psql -U artha -d artha_db -c "INSERT INTO users (id, email, password, name, role, \"createdAt\", \"updatedAt\") VALUES ('admin-001', 'admin@artha.com', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYqJfZigWOS', 'Admin', 'ADMIN', NOW(), NOW()) ON CONFLICT DO NOTHING"
