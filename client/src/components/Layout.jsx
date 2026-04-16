@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore, useBusinessStore } from '../store/auth';
+import { cn } from '../components/ui';
 import {
   LayoutDashboard,
   Users,
@@ -23,8 +24,12 @@ import {
   Bell,
   Search,
   Plus,
-  HelpCircle
+  HelpCircle,
+  ShieldAlert,
+  Calendar,
+  Zap
 } from 'lucide-react';
+import { differenceInDays } from 'date-fns';
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -39,6 +44,7 @@ const navItems = [
   { path: '/reports', label: 'Reports', icon: BarChart3 },
   { path: '/import', label: 'Import', icon: Upload },
   { path: '/settings', label: 'Settings', icon: Settings },
+  { path: '/superadmin', label: 'System Control', icon: ShieldAlert, adminOnly: true },
 ];
 
 const quickActions = [
@@ -57,8 +63,21 @@ function Layout({ children }) {
 
   useEffect(() => {
     initAuth();
-    fetchBusinesses();
-  }, []);
+    const checkBusinesses = async () => {
+      try {
+        const data = await fetchBusinesses();
+        if (data.length === 0 && !location.pathname.startsWith('/onboarding') && !location.pathname.startsWith('/superadmin')) {
+          navigate('/onboarding');
+        }
+      } catch (err) {
+        console.error('Failed to fetch businesses on mount', err);
+      }
+    };
+    
+    if (user) {
+      checkBusinesses();
+    }
+  }, [user]);
 
   const handleLogout = () => {
     logout();
@@ -96,14 +115,23 @@ function Layout({ children }) {
                   <select
                     value={currentBusiness?.id || ''}
                     onChange={(e) => {
+                      if (e.target.value === 'ADD_NEW') {
+                        navigate('/onboarding');
+                        return;
+                      }
                       const business = businesses.find((b) => b.id === e.target.value);
                       setCurrentBusiness(business);
                     }}
                     className="w-full appearance-none bg-transparent rounded-xl pl-10 pr-10 py-3 text-sm font-bold text-gray-900 cursor-pointer focus:outline-none transition-all group-hover:bg-white"
                   >
-                    {businesses.map((b) => (
-                      <option key={b.id} value={b.id}>{b.name}</option>
-                    ))}
+                    <optgroup label="Your Businesses">
+                      {businesses.map((b) => (
+                        <option key={b.id} value={b.id}>{b.name}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Actions">
+                      <option value="ADD_NEW">+ Add New Business</option>
+                    </optgroup>
                   </select>
                   <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-500" />
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -115,6 +143,7 @@ function Layout({ children }) {
         {/* Navigation */}
         <nav className="flex-1 px-4 space-y-1 overflow-y-auto no-scrollbar pb-8">
           {navItems.map((item) => {
+            if (item.adminOnly && user?.role !== 'ADMIN') return null;
             const Icon = item.icon;
             const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
             return (
@@ -140,8 +169,50 @@ function Layout({ children }) {
         </nav>
 
         {/* Sidebar Footer */}
-        <div className="p-4 bg-gray-50/50 border-t border-gray-100">
-          <div className="flex items-center gap-3 p-3 rounded-2xl bg-white shadow-sm border border-gray-100 group">
+        <div className="p-4 space-y-3 bg-gray-50/50 border-t border-gray-100">
+          {/* Subscription Status */}
+          {sidebarOpen && user?.subscription && (
+            <div className="px-3 py-4 bg-white rounded-3xl shadow-sm border border-gray-100">
+               <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                     <div className="p-2 bg-indigo-50 rounded-xl">
+                        <Zap className="w-5 h-5 text-indigo-600 fill-indigo-600" />
+                     </div>
+                     <div>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Active Plan</p>
+                        <p className="text-sm font-black text-gray-900 leading-none mt-0.5">{user.subscription.plan.name}</p>
+                     </div>
+                  </div>
+                  <div className="text-right">
+                     {(() => {
+                        const daysLeft = differenceInDays(new Date(user.subscription.endDate), new Date());
+                        return (
+                          <p className={cn(
+                            "text-sm font-black tracking-tighter",
+                            daysLeft < 5 ? "text-rose-500" : "text-emerald-500"
+                          )}>
+                             {daysLeft} Days
+                          </p>
+                        );
+                     })()}
+                     <p className="text-[9px] font-black text-gray-400 uppercase">Left</p>
+                  </div>
+               </div>
+               
+               <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <motion.div 
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.max(5, Math.min(100, (differenceInDays(new Date(user.subscription.endDate), new Date()) / (user.subscription.plan.duration || 365)) * 100))}%` }}
+                    className={cn(
+                      "h-full rounded-full transition-all duration-1000",
+                      differenceInDays(new Date(user.subscription.endDate), new Date()) < 30 ? "bg-rose-500" : "bg-indigo-600"
+                    )}
+                  />
+               </div>
+            </div>
+          )}
+
+          <div className="flex items-center gap-3 p-3 rounded-[24px] bg-white shadow-sm border border-gray-100 group">
              <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-indigo-200">
                 <span className="text-white font-black">{user?.name?.[0]?.toUpperCase() || 'A'}</span>
              </div>
@@ -151,11 +222,9 @@ function Layout({ children }) {
                   <p className="text-[10px] font-bold text-gray-400 truncate uppercase tracking-widest">{user?.email?.split('@')[0]}</p>
                </div>
              )}
-             {sidebarOpen && (
-               <button onClick={handleLogout} className="p-2 text-gray-300 hover:text-rose-500 transition-colors">
-                  <LogOut className="w-5 h-5" />
-               </button>
-             )}
+             <button onClick={handleLogout} className="p-2 text-gray-300 hover:text-rose-500 transition-colors">
+                <LogOut className="w-5 h-5" />
+             </button>
           </div>
         </div>
 
@@ -241,7 +310,5 @@ function Layout({ children }) {
     </div>
   );
 }
-
-import { cn } from '../components/ui';
 
 export default Layout;

@@ -59,15 +59,50 @@ router.get('/business/:businessId', async (req, res, next) => {
       }),
     };
 
-    const [parties, total] = await Promise.all([
+    const [partiesData, total] = await Promise.all([
       prisma.party.findMany({
         where,
         orderBy: { name: 'asc' },
+        include: {
+          _count: { select: { invoices: true, purchases: true, transactions: true } }
+        },
         skip: (Number(page) - 1) * Number(limit),
         take: Number(limit),
       }),
       prisma.party.count({ where }),
     ]);
+
+    // Calculate balances for each party
+    const parties = await Promise.all(partiesData.map(async (party) => {
+      const [invoices, purchases, transactions] = await Promise.all([
+        prisma.invoice.aggregate({
+          where: { partyId: party.id, status: { in: ['PAID', 'PARTIAL', 'SENT', 'DRAFT'] } },
+          _sum: { totalAmount: true },
+        }),
+        prisma.purchase.aggregate({
+          where: { partyId: party.id, status: { in: ['PAID', 'PARTIAL', 'RECEIVED'] } },
+          _sum: { totalAmount: true },
+        }),
+        prisma.transaction.findMany({
+          where: { partyId: party.id },
+        }),
+      ]);
+
+      const totalInvoiced = invoices._sum.totalAmount || 0;
+      const totalPurchased = purchases._sum.totalAmount || 0;
+      const receipts = transactions.filter(t => t.type === 'RECEIPT').reduce((sum, t) => sum + t.amount, 0);
+      const payments = transactions.filter(t => t.type === 'PAYMENT').reduce((sum, t) => sum + t.amount, 0);
+
+      const opening = party.balanceType === 'RECEIVABLE' ? party.openingBalance : -party.openingBalance;
+      const netBalance = opening + totalInvoiced + payments - totalPurchased - receipts;
+
+      return {
+        ...party,
+        currentBalance: netBalance,
+        displayBalance: Math.abs(netBalance),
+        currentBalanceType: netBalance >= 0 ? 'RECEIVABLE' : 'PAYABLE'
+      };
+    }));
 
     res.json({
       success: true,
@@ -175,27 +210,57 @@ router.get('/:id/balance', async (req, res, next) => {
       });
     }
 
-    const invoices = await prisma.invoice.aggregate({
-      where: {
-        partyId: req.params.id,
-        status: { in: ['PAID', 'PARTIAL', 'SENT'] },
-      },
-      _sum: { totalAmount: true, paidAmount: true },
-    });
+    const [invoices, purchases, transactions] = await Promise.all([
+      prisma.invoice.aggregate({
+        where: { partyId: req.params.id, status: { in: ['PAID', 'PARTIAL', 'SENT', 'DRAFT'] } },
+        _sum: { totalAmount: true, paidAmount: true },
+      }),
+      prisma.purchase.aggregate({
+        where: { partyId: req.params.id, status: { in: ['PAID', 'PARTIAL', 'RECEIVED'] } },
+        _sum: { totalAmount: true, paidAmount: true },
+      }),
+      prisma.transaction.findMany({
+        where: { partyId: req.params.id },
+      }),
+    ]);
 
-    const totalBilled = invoices._sum.totalAmount || 0;
-    const totalPaid = invoices._sum.paidAmount || 0;
-    const currentBalance = totalBilled - totalPaid;
+    const totalInvoiced = invoices._sum.totalAmount || 0;
+    const totalInvPaid = invoices._sum.paidAmount || 0;
+    const totalPurchased = purchases._sum.totalAmount || 0;
+    const totalPurPaid = purchases._sum.paidAmount || 0;
 
-    const balance = party.openingBalance + currentBalance;
+    const receipts = transactions
+      .filter(t => t.type === 'RECEIPT')
+      .reduce((sum, t) => sum + t.amount, 0);
+    const payments = transactions
+      .filter(t => t.type === 'PAYMENT')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const isReceivable = party.balanceType === 'RECEIVABLE';
+
+    // Balance Formula: 
+    // If Receivable (Customer): Opening + Total Invoiced - (Total Inv Paid + Receipts)
+    // If Payable (Supplier): Opening + Total Purchased - (Total Pur Paid + Payments)
+    
+    // However, a party can be BOTH. So we combine everything:
+    // Net Balance = (Opening if Dr) + Invoices + Payments - Purchases - Receipts
+    
+    const opening = party.balanceType === 'RECEIVABLE' ? party.openingBalance : -party.openingBalance;
+    const netBalance = opening + totalInvoiced + payments - totalPurchased - receipts;
 
     res.json({
       success: true,
       data: {
-        openingBalance: party.openingBalance,
+        id: req.params.id,
         balanceType: party.balanceType,
-        currentBalance,
-        totalBalance: party.balanceType === 'RECEIVABLE' ? balance : -balance,
+        openingBalance: party.openingBalance,
+        totalInvoiced,
+        totalPurchased,
+        totalReceipts: receipts,
+        totalPayments: payments,
+        netBalance,
+        displayBalance: Math.abs(netBalance),
+        status: netBalance >= 0 ? 'RECEIVABLE' : 'PAYABLE'
       },
     });
   } catch (error) {

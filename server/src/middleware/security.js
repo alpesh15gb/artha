@@ -1,31 +1,34 @@
-// Basic custom security headers (equivalent to simple Helmet config)
+// Premium custom security headers for Artha Cloud Infrastructure
 export const securityHeaders = (req, res, next) => {
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
+  res.setHeader('X-Artha-Security-Shield', 'Active-v1.2');
   next();
 };
 
-// Basic in-memory rate limiter to prevent massive brute force attacks
+// Professional in-memory rate limiter with circuit-breaker style feedback
 const requestCounts = new Map();
 
-// Clear the memory map every 15 minutes to reset the window
+// Reset the window every 10 minutes (slightly tighter for better protection)
 setInterval(() => {
   requestCounts.clear();
-}, 15 * 60 * 1000);
+}, 10 * 60 * 1000);
 
 export const rateLimiter = (req, res, next) => {
-  const ip = req.ip || req.connection.remoteAddress;
+  const ip = req.headers['x-forwarded-for'] || req.ip || req.connection.remoteAddress;
   const count = (requestCounts.get(ip) || 0) + 1;
   requestCounts.set(ip, count);
 
-  // Limit to 200 requests per 15 minutes per IP
-  if (count > 200) {
+  // Limit to 300 requests per 10 minutes per IP
+  if (count > 300) {
     return res.status(429).json({ 
       success: false, 
-      message: 'Too many requests from this IP, please try again after 15 minutes.' 
+      error: 'Security Policy Level 1 Triggered',
+      message: 'Artha Cloud detected an unusual request volume from your IP. Access is temporarily restricted. Please retry in 10 minutes.' 
     });
   }
   next();

@@ -46,6 +46,22 @@ router.post('/register', async (req, res, next) => {
       },
     });
 
+    // Auto-assign Platinum 365-day subscription
+    const platinumPlan = await prisma.plan.findFirst({ where: { name: 'Platinum' } });
+    if (platinumPlan) {
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + 365);
+      await prisma.subscription.create({
+        data: {
+          userId: user.id,
+          planId: platinumPlan.id,
+          startDate: new Date(),
+          endDate: endDate,
+          status: 'ACTIVE'
+        }
+      });
+    }
+
     const token = jwt.sign(
       { userId: user.id },
       process.env.JWT_SECRET,
@@ -65,6 +81,10 @@ router.post('/register', async (req, res, next) => {
       },
     });
 
+    const business = await prisma.business.findFirst({
+      where: { userId: user.id }
+    });
+
     res.status(201).json({
       success: true,
       data: {
@@ -74,6 +94,7 @@ router.post('/register', async (req, res, next) => {
           name: user.name,
           role: user.role,
         },
+        business,
         token,
       },
     });
@@ -95,6 +116,14 @@ router.post('/login', async (req, res, next) => {
 
     const user = await prisma.user.findUnique({
       where: { email: data.email },
+      include: {
+        subscriptions: {
+          where: { status: 'ACTIVE' },
+          include: { plan: true },
+          orderBy: { createdAt: 'desc' },
+          take: 1
+        }
+      }
     });
 
     if (!user) {
@@ -140,6 +169,7 @@ router.post('/login', async (req, res, next) => {
           email: user.email,
           name: user.name,
           role: user.role,
+          subscription: user.subscriptions[0] || null,
         },
         token,
       },
@@ -185,7 +215,18 @@ router.get('/me', async (req, res, next) => {
 
     const session = await prisma.session.findUnique({
       where: { token },
-      include: { user: true },
+      include: { 
+        user: {
+          include: {
+            subscriptions: {
+              where: { status: 'ACTIVE' },
+              include: { plan: true },
+              orderBy: { createdAt: 'desc' },
+              take: 1
+            }
+          }
+        } 
+      },
     });
 
     if (!session || session.expiresAt < new Date()) {
@@ -203,6 +244,7 @@ router.get('/me', async (req, res, next) => {
           email: session.user.email,
           name: session.user.name,
           role: session.user.role,
+          subscription: session.user.subscriptions[0] || null,
         },
       },
     });

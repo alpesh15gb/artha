@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 
 import authRoutes from './routes/auth.routes.js';
 import businessRoutes from './routes/business.routes.js';
+import settingsRoutes from './routes/settings.routes.js';
 import partyRoutes from './routes/party.routes.js';
 import itemRoutes from './routes/item.routes.js';
 import invoiceRoutes from './routes/invoice.routes.js';
@@ -18,8 +19,10 @@ import reportRoutes from './routes/report.routes.js';
 import importRoutes from './routes/import.routes.js';
 import accountRoutes from './routes/account.routes.js';
 import downloadRoutes from './routes/download.routes.js';
+import adminRoutes from './routes/admin.routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { securityHeaders, rateLimiter } from './middleware/security.js';
+import { auditLogger } from './middleware/auditLog.js';
 
 dotenv.config();
 
@@ -40,21 +43,23 @@ app.use(fileUpload({
 app.use(securityHeaders);
 app.use(rateLimiter);
 
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/businesses', businessRoutes);
-app.use('/api/parties', partyRoutes);
-app.use('/api/items', itemRoutes);
-app.use('/api/invoices', invoiceRoutes);
-app.use('/api/estimates', estimateRoutes);
-app.use('/api/purchases', purchaseRoutes);
-app.use('/api/payments', paymentRoutes);
-app.use('/api/expenses', expenseRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/parties', auditLogger('PARTY'), partyRoutes);
+app.use('/api/items', auditLogger('ITEM'), itemRoutes);
+app.use('/api/invoices', auditLogger('INVOICE'), invoiceRoutes);
+app.use('/api/estimates', auditLogger('ESTIMATE'), estimateRoutes);
+app.use('/api/purchases', auditLogger('PURCHASE'), purchaseRoutes);
+app.use('/api/payments', auditLogger('PAYMENT'), paymentRoutes);
+app.use('/api/expenses', auditLogger('EXPENSE'), expenseRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/accounts', accountRoutes);
 app.use('/api/download', downloadRoutes);
 app.use('/api/import', importRoutes);
+app.use('/api/admin', adminRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -62,8 +67,40 @@ app.get('/api/health', (req, res) => {
 
 app.use(errorHandler);
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Artha API Server running on port ${PORT}`);
+  
+  // Bootstrap Admin for the user
+  try {
+    const { PrismaClient } = await import('@prisma/client');
+    const prisma = new PrismaClient();
+    await prisma.user.update({
+      where: { email: 'admin@artha.com' },
+      data: { role: 'ADMIN' }
+    });
+
+    // Seed Platinum Plan (Single Tier)
+    await prisma.plan.deleteMany(); // Clear existing tiers
+    await prisma.plan.create({
+      data: {
+        name: 'Platinum',
+        price: 999,
+        duration: 365, // Yearly billing
+        features: { 
+          businesses: 'Unlimited', 
+          invoices: 'Unlimited', 
+          items: 'Unlimited',
+          parties: 'Unlimited',
+          reports: 'Unlimited'
+        }
+      }
+    });
+    console.log('Seeded Platinum Unlimited Plan (Yearly: 999)');
+
+    console.log('Successfully initialized system bootstrap.');
+  } catch (e) {
+    console.log('Bootstrap info:', e.message);
+  }
 });
 
 export default app;

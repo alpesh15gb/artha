@@ -141,7 +141,7 @@ function Purchases() {
                                 </div>
                               </td>
                               <td className="px-6 py-4">
-                                <span className="text-sm font-bold text-gray-700">{p.partyName || 'Vendor'}</span>
+                                <span className="text-sm font-bold text-gray-700">{p.party?.name || 'Vendor'}</span>
                               </td>
                               <td className="px-6 py-4 text-xs font-bold text-gray-500">
                                 {format(new Date(p.date), 'dd MMM, yyyy')}

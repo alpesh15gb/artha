@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { z } from 'zod';
 import { authenticate } from '../middleware/auth.js';
 import { verifyBusinessOwnership } from '../middleware/businessAuth.js';
 
@@ -8,6 +9,22 @@ const prisma = new PrismaClient();
 
 router.use(authenticate);
 router.use(verifyBusinessOwnership);
+
+const createPaymentSchema = z.object({
+  businessId: z.string().uuid(),
+  partyId: z.string().uuid().optional(),
+  date: z.string().datetime().optional(),
+  amount: z.number().min(0),
+  paymentMethod: z.enum(['CASH', 'BANK', 'UPI', 'CARD', 'CHEQUE', 'NEFT', 'RTGS']).optional(),
+  reference: z.string().optional(),
+  notes: z.string().optional(),
+  bankAccountId: z.string().uuid().optional(),
+  cashAccountId: z.string().uuid().optional(),
+  adjustments: z.array(z.object({
+    invoiceId: z.string().uuid(),
+    amount: z.number().min(0),
+  })).optional(),
+});
 
 router.get('/business/:businessId', async (req, res, next) => {
   try {
@@ -42,7 +59,8 @@ router.get('/business/:businessId', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { adjustments, ...paymentData } = req.body;
+    const data = createPaymentSchema.parse(req.body);
+    const { adjustments, ...paymentData } = data;
 
     const latestPayment = await prisma.payment.findFirst({
       where: { businessId: paymentData.businessId },
@@ -69,12 +87,14 @@ router.post('/', async (req, res, next) => {
         for (const adj of adjustments) {
           const invoice = await tx.invoice.findFirst({ where: { id: adj.invoiceId, business: { userId: req.user.id } } });
           if (invoice) {
+            const newPaidAmount = invoice.paidAmount + adj.amount;
+            const newBalanceDue = Math.max(0, invoice.totalAmount - newPaidAmount);
             await tx.invoice.update({
               where: { id: adj.invoiceId },
               data: {
-                paidAmount: invoice.paidAmount + adj.amount,
-                balanceDue: invoice.balanceDue - adj.amount,
-                status: invoice.totalAmount <= invoice.paidAmount + adj.amount ? 'PAID' : 'PARTIAL',
+                paidAmount: newPaidAmount,
+                balanceDue: newBalanceDue,
+                status: newBalanceDue <= 0 ? 'PAID' : 'PARTIAL',
               },
             });
           }
@@ -96,10 +116,26 @@ router.post('/', async (req, res, next) => {
           type: 'RECEIPT',
           partyId: paymentData.partyId,
           amount: paymentData.amount,
-          balance: paymentData.amount,
+          balance: 0,
           reference: paymentData.reference,
+          bankAccountId: paymentData.bankAccountId,
+          cashAccountId: paymentData.cashAccountId,
         },
       });
+
+      if (paymentData.bankAccountId) {
+        await tx.bankAccount.update({
+          where: { id: paymentData.bankAccountId },
+          data: { currentBalance: { increment: paymentData.amount } },
+        });
+      }
+
+      if (paymentData.cashAccountId) {
+        await tx.cashAccount.update({
+          where: { id: paymentData.cashAccountId },
+          data: { currentBalance: { increment: paymentData.amount } },
+        });
+      }
 
       return payment;
     });

@@ -6,13 +6,19 @@ import {
   Plus, Search, Filter, MoreHorizontal, Copy, 
   ChevronDown, ChevronUp, Download, Eye, Trash2, 
   CheckCircle2, Clock, AlertCircle, FileText,
-  Mail, ExternalLink, Calendar
+  Mail, ExternalLink, Calendar, Pencil, Printer
 } from 'lucide-react';
 import { format, isAfter, isBefore } from 'date-fns';
 import api from '../services/api';
 import { useBusinessStore } from '../store/auth';
 import { Button, Input, Select, Card, Badge, cn } from '../components/ui';
 import toast from 'react-hot-toast';
+import { exportToPDF, printElement } from '../utils/export';
+import { InvoiceTemplate1 } from '../components/invoices/InvoiceTemplate1';
+import { InvoiceTemplate2 } from '../components/invoices/InvoiceTemplate2';
+import { InvoiceTemplate3 } from '../components/invoices/InvoiceTemplate3';
+import { EstimateTemplateAlphesh } from '../components/invoices/EstimateTemplateAlphesh';
+
 
 const STATUS_GROUPS = [
   { id: 'UNPAID', label: 'Unpaid', color: 'text-orange-600', bg: 'bg-orange-50', icon: Clock },
@@ -28,6 +34,8 @@ function Invoices() {
   const { currentBusiness } = useBusinessStore();
   const [search, setSearch] = useState('');
   const [expandedSections, setExpandedSections] = useState(new Set(['UNPAID', 'PAID', 'DRAFT']));
+  const [previewInvoice, setPreviewInvoice] = useState(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   const { data: invoicesData, isLoading } = useQuery({
     queryKey: ['invoices', currentBusiness?.id, search],
@@ -56,15 +64,15 @@ function Invoices() {
     return groups;
   }, [invoices]);
 
-  const metrics = useMemo(() => {
-     return {
-       UNPAID: `${groupedInvoices.UNPAID.length}/${groupedInvoices.UNPAID.length}`, // Simplified for UI demonstration
-       PAID: `${groupedInvoices.PAID.length}/${groupedInvoices.PAID.length}`,
-       PARTIAL: `${groupedInvoices.PARTIAL.length}/${groupedInvoices.PARTIAL.length}`,
-       OVERDUE: `${groupedInvoices.OVERDUE.length}/${groupedInvoices.OVERDUE.length}`,
-       DRAFT: `${groupedInvoices.DRAFT.length}/${groupedInvoices.DRAFT.length}`,
-     };
-  }, [groupedInvoices]);
+const metrics = useMemo(() => {
+      return {
+        UNPAID: groupedInvoices.UNPAID.length,
+        PAID: groupedInvoices.PAID.length,
+        PARTIAL: groupedInvoices.PARTIAL.length,
+        OVERDUE: groupedInvoices.OVERDUE.length,
+        DRAFT: groupedInvoices.DRAFT.length,
+      };
+   }, [groupedInvoices]);
 
   const toggleSection = (id) => {
     const newSet = new Set(expandedSections);
@@ -85,6 +93,38 @@ function Invoices() {
       toast.success('Invoice deleted');
     },
   });
+
+  const handleDownload = async (inv) => {
+    setPreviewInvoice(inv);
+    setTimeout(async () => {
+      try {
+        setIsExporting(true);
+        const filename = `Invoice_${inv.invoiceNumber}.pdf`;
+        await exportToPDF('print-area', filename);
+        toast.success('PDF Downloaded');
+      } catch (err) {
+        toast.error('Failed to generate PDF');
+      } finally {
+        setIsExporting(false);
+        setPreviewInvoice(null);
+      }
+    }, 1000);
+  };
+
+  const handlePrint = async (inv) => {
+    setPreviewInvoice(inv);
+    setTimeout(async () => {
+      try {
+        setIsExporting(true);
+        printElement('print-area');
+      } catch (err) {
+        toast.error('Failed to open print window');
+      } finally {
+        setIsExporting(false);
+        setPreviewInvoice(null);
+      }
+    }, 1000);
+  };
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto">
@@ -198,6 +238,8 @@ function Invoices() {
                               onCopy={copyToClipboard}
                               onEdit={() => navigate(`/invoices/edit/${inv.id}`)}
                               onDelete={() => deleteMutation.mutate(inv.id)}
+                              onDownload={() => handleDownload(inv)}
+                              onPrint={() => handlePrint(inv)}
                             />
                           ))}
                         </tbody>
@@ -210,11 +252,78 @@ function Invoices() {
           );
         })}
       </div>
+
+      {/* Hidden Preview Area for Export */}
+      {previewInvoice && (
+        <div className="fixed -left-[4000px] top-0">
+          <div id="print-area" className="w-[900px] bg-white">
+            {previewInvoice.template === 'template1' && (
+              <InvoiceTemplate1 
+                invoice={previewInvoice} 
+                business={currentBusiness} 
+                party={previewInvoice.party} 
+                items={previewInvoice.items} 
+                totals={{
+                  subtotal: previewInvoice.subtotal,
+                  cgst: previewInvoice.cgstAmount,
+                  sgst: previewInvoice.sgstAmount,
+                  igst: previewInvoice.igstAmount,
+                  total: previewInvoice.totalAmount
+                }} 
+              />
+            )}
+            {previewInvoice.template === 'template2' && (
+              <InvoiceTemplate2 
+                invoice={previewInvoice} 
+                business={currentBusiness} 
+                party={previewInvoice.party} 
+                items={previewInvoice.items} 
+                totals={{
+                  subtotal: previewInvoice.subtotal,
+                  cgst: previewInvoice.cgstAmount,
+                  sgst: previewInvoice.sgstAmount,
+                  igst: previewInvoice.igstAmount,
+                  total: previewInvoice.totalAmount
+                }} 
+              />
+            )}
+            {previewInvoice.template === 'template3' && (
+              <InvoiceTemplate3 
+                invoice={previewInvoice} 
+                business={currentBusiness} 
+                party={previewInvoice.party} 
+                items={previewInvoice.items} 
+                totals={{
+                  subtotal: previewInvoice.subtotal,
+                  cgst: previewInvoice.cgstAmount,
+                  sgst: previewInvoice.sgstAmount,
+                  igst: previewInvoice.igstAmount,
+                }} 
+              />
+            )}
+            {previewInvoice.template === 'alphesh' && (
+              <EstimateTemplateAlphesh 
+                invoice={previewInvoice} 
+                business={currentBusiness} 
+                party={previewInvoice.party} 
+                items={previewInvoice.items} 
+                totals={{
+                  subtotal: previewInvoice.subtotal,
+                  cgst: previewInvoice.cgstAmount,
+                  sgst: previewInvoice.sgstAmount,
+                  igst: previewInvoice.igstAmount,
+                  total: previewInvoice.totalAmount
+                }} 
+              />
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function InvoiceRow({ inv, onCopy, onEdit, onDelete }) {
+function InvoiceRow({ inv, onCopy, onEdit, onDelete, onDownload, onPrint }) {
   return (
     <tr className="group hover:bg-indigo-50/30 transition-colors">
       <td className="px-6 py-4"><input type="checkbox" className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-600" /></td>
@@ -261,15 +370,21 @@ function InvoiceRow({ inv, onCopy, onEdit, onDelete }) {
       </td>
       <td className="px-6 py-4">
         <div className="flex flex-wrap gap-1">
-          <Badge variant="warning" className="text-[10px] px-2 py-0">GST-18%</Badge>
-          <Badge variant="default" className="text-[10px] px-2 py-0 bg-blue-50 text-blue-600">Artha</Badge>
+          {inv.tags?.length > 0 ? (
+            inv.tags.map((tag, idx) => (
+              <Badge key={idx} variant="default" className="text-[10px] px-2 py-0 bg-indigo-50 text-indigo-600 border-indigo-100">{tag}</Badge>
+            ))
+          ) : (
+            <span className="text-[10px] text-gray-300 font-medium italic">No tags</span>
+          )}
         </div>
       </td>
       <td className="px-6 py-4 text-right">
         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-           <button onClick={onEdit} className="p-2 hover:bg-white rounded-lg text-gray-400 hover:text-indigo-600"><Eye className="w-4 h-4" /></button>
-           <button className="p-2 hover:bg-white rounded-lg text-gray-400 hover:text-indigo-600"><Download className="w-4 h-4" /></button>
-           <button onClick={onDelete} className="p-2 hover:bg-white rounded-lg text-gray-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+           <button onClick={onEdit} className="p-2 hover:bg-white rounded-lg text-gray-400 hover:text-indigo-600" title="Edit Invoice"><Pencil className="w-4 h-4" /></button>
+           <button onClick={onPrint} className="p-2 hover:bg-white rounded-lg text-gray-400 hover:text-indigo-600" title="Print"><Printer className="w-4 h-4" /></button>
+           <button onClick={onDownload} className="p-2 hover:bg-white rounded-lg text-gray-400 hover:text-indigo-600" title="Download PDF"><Download className="w-4 h-4" /></button>
+           <button onClick={onDelete} className="p-2 hover:bg-white rounded-lg text-gray-400 hover:text-red-500" title="Delete"><Trash2 className="w-4 h-4" /></button>
         </div>
       </td>
     </tr>

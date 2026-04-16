@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Plus, ArrowRightLeft, CreditCard, Banknote, 
@@ -9,11 +9,16 @@ import {
 import { format } from 'date-fns';
 import api from '../services/api';
 import { useBusinessStore } from '../store/auth';
-import { Card, Badge, Button, Input, cn } from '../components/ui';
+import { Card, Badge, Button, Input, Modal, cn } from '../components/ui';
+import toast from 'react-hot-toast';
 
 function Accounts() {
   const { currentBusiness } = useBusinessStore();
+  const queryClient = useQueryClient();
   const [txSearch, setTxSearch] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addAccountType, setAddAccountType] = useState('bank'); // 'bank' or 'cash'
+  const [accountForm, setAccountForm] = useState({ bankName: '', accountNumber: '', openingBalance: 0 });
 
   const { data: bankAccountsData, isLoading: isLoadingAccounts } = useQuery({
     queryKey: ['bank-accounts', currentBusiness?.id],
@@ -21,13 +26,50 @@ function Accounts() {
     enabled: !!currentBusiness?.id,
   });
 
-  const { data: txData, isLoading: isLoadingTx } = useQuery({
+  const { data: cashAccountsData } = useQuery({
+    queryKey: ['cash-accounts', currentBusiness?.id],
+    queryFn: () => api.get(`/accounts/cash-accounts/business/${currentBusiness.id}`).then(r => r.data),
+    enabled: !!currentBusiness?.id,
+  });
+
+  const { data: txData } = useQuery({
     queryKey: ['transactions', currentBusiness?.id, txSearch],
     queryFn: () => api.get(`/accounts/transactions/business/${currentBusiness.id}?search=${txSearch}&limit=50`).then(r => r.data),
     enabled: !!currentBusiness?.id,
   });
 
-  const accounts = bankAccountsData?.data || [];
+  const addAccountMutation = useMutation({
+    mutationFn: (data) => {
+      if (addAccountType === 'bank') {
+        return api.post('/accounts/bank-accounts', { 
+          bankName: data.bankName, 
+          accountName: data.bankName, 
+          accountNumber: data.accountNumber, 
+          ifscCode: 'UNKNOWN',
+          businessId: currentBusiness.id, 
+          currentBalance: data.openingBalance || 0 
+        });
+      } else {
+        return api.post('/accounts/cash-accounts', { 
+          name: data.bankName, 
+          businessId: currentBusiness.id, 
+          openingBalance: data.openingBalance || 0 
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['bank-accounts']);
+      queryClient.invalidateQueries(['cash-accounts']);
+      toast.success(`${addAccountType === 'bank' ? 'Bank' : 'Cash'} account added`);
+      setShowAddModal(false);
+      setAccountForm({ bankName: '', accountNumber: '', openingBalance: 0 });
+    },
+    onError: () => toast.error('Failed to add account'),
+  });
+
+  const bankAccounts = bankAccountsData?.data || [];
+  const cashAccounts = cashAccountsData?.data || [];
+  const accounts = [...bankAccounts, ...cashAccounts];
   const transactions = txData?.data || [];
 
   const totalBalance = useMemo(() => {
@@ -44,7 +86,7 @@ function Accounts() {
         </div>
         <div className="flex items-center gap-3">
            <Button variant="secondary" icon={ArrowRightLeft}>Transfer Funds</Button>
-           <Button icon={Plus}>Linked Account</Button>
+           <Button icon={Plus} onClick={() => setShowAddModal(true)}>Linked Account</Button>
         </div>
       </div>
 
@@ -175,6 +217,62 @@ function Accounts() {
             )}
          </div>
       </div>
+
+      <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add Account">
+        <div className="space-y-4">
+          <div className="flex gap-2 p-1 bg-gray-100 rounded-xl">
+            <button 
+              type="button"
+              onClick={() => { setAddAccountType('bank'); setAccountForm({ bankName: '', accountNumber: '', openingBalance: 0 }); }}
+              className={cn("flex-1 py-2 rounded-lg text-sm font-bold transition-colors", addAccountType === 'bank' ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500")}
+            >Bank Account</button>
+            <button 
+              type="button"
+              onClick={() => { setAddAccountType('cash'); setAccountForm({ bankName: '', accountNumber: '', openingBalance: 0 }); }}
+              className={cn("flex-1 py-2 rounded-lg text-sm font-bold transition-colors", addAccountType === 'cash' ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500")}
+            >Cash Account</button>
+          </div>
+          
+          {addAccountType === 'bank' ? (
+            <>
+              <Input 
+                label="Bank Name" 
+                value={accountForm.bankName} 
+                onChange={e => setAccountForm({...accountForm, bankName: e.target.value})} 
+                placeholder="e.g., HDFC Bank"
+              />
+              <Input 
+                label="Account Number" 
+                value={accountForm.accountNumber} 
+                onChange={e => setAccountForm({...accountForm, accountNumber: e.target.value})} 
+                placeholder="e.g., 1234567890"
+              />
+            </>
+          ) : (
+            <Input 
+              label="Account Name" 
+              value={accountForm.bankName} 
+              onChange={e => setAccountForm({...accountForm, bankName: e.target.value})} 
+              placeholder="e.g., Petty Cash"
+            />
+          )}
+          
+          <Input 
+            label="Opening Balance" 
+            type="number" 
+            value={accountForm.openingBalance} 
+            onChange={e => setAccountForm({...accountForm, openingBalance: parseFloat(e.target.value) || 0})} 
+          />
+          
+          <Button 
+            className="w-full" 
+            onClick={() => addAccountMutation.mutate(accountForm)}
+            loading={addAccountMutation.isPending}
+          >
+            Add {addAccountType === 'bank' ? 'Bank' : 'Cash'} Account
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }

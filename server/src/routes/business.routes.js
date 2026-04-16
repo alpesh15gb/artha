@@ -52,24 +52,44 @@ router.post('/', async (req, res, next) => {
   try {
     const data = createBusinessSchema.parse(req.body);
 
-    const business = await prisma.business.create({
-      data: {
-        userId: req.user.id,
-        name: data.name,
-        legalName: data.legalName,
-        gstin: data.gstin,
-        pan: data.pan,
-        address: data.address,
-        phone: data.phone,
-        email: data.email,
-        settings: {
-          create: {},
+    const result = await prisma.$transaction(async (tx) => {
+      const business = await tx.business.create({
+        data: {
+          userId: req.user.id,
+          name: data.name,
+          legalName: data.legalName,
+          gstin: data.gstin,
+          pan: data.pan,
+          address: data.address,
+          phone: data.phone,
+          email: data.email,
+          settings: {
+            create: {},
+          },
+          cashAccounts: {
+            create: {
+              name: 'Cash Account',
+              openingBalance: 0,
+              currentBalance: 0,
+            }
+          },
+          bankAccounts: {
+            create: {
+              bankName: 'Main Bank',
+              accountName: 'Operating Account',
+              accountNumber: 'PENDING',
+              ifscCode: 'TBD',
+              openingBalance: 0,
+              currentBalance: 0,
+            }
+          }
         },
-      },
-      include: { settings: true },
+        include: { settings: true, cashAccounts: true, bankAccounts: true },
+      });
+      return business;
     });
 
-    res.status(201).json({ success: true, data: business });
+    res.status(201).json({ success: true, data: result });
   } catch (error) {
     next(error);
   }
@@ -100,10 +120,6 @@ router.get('/:id', async (req, res, next) => {
 
 router.put('/:id', async (req, res, next) => {
   try {
-    console.log('PUT /businesses/:id', req.params.id);
-    console.log('Body:', req.body);
-    console.log('User:', req.user?.id);
-    
     const { settings, ...businessData } = req.body;
     
     const updateData = { ...businessData };
@@ -118,8 +134,6 @@ router.put('/:id', async (req, res, next) => {
       },
       data: updateData,
     });
-
-    console.log('Update result:', business);
 
     if (business.count === 0) {
       return res.status(404).json({
@@ -143,7 +157,6 @@ router.put('/:id', async (req, res, next) => {
 
     res.json({ success: true, data: updated });
   } catch (error) {
-    console.error('PUT /businesses error:', error);
     next(error);
   }
 });
@@ -174,9 +187,6 @@ router.delete('/:id', async (req, res, next) => {
 router.post('/:id/logo', async (req, res, next) => {
   try {
     const { id } = req.params;
-    console.log('Logo upload request for business:', id);
-    console.log('Files:', req.files);
-    console.log('Body:', req.body);
     
     if (!req.files || !req.files.logo) {
       return res.status(400).json({ success: false, message: 'No logo file uploaded' });
@@ -214,11 +224,56 @@ router.post('/:id/logo', async (req, res, next) => {
       where: { id },
       data: { logo: logoUrl },
     });
-    console.log('Business updated with logo:', updated.logo);
 
     res.json({ success: true, data: { logo: logoUrl } });
   } catch (error) {
-    console.error('Logo upload error:', error);
+    next(error);
+  }
+});
+
+router.post('/:id/signature', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    
+    if (!req.files || (!req.files.signature && !req.files.signatureImage)) {
+      return res.status(400).json({ success: false, message: 'No signature file uploaded' });
+    }
+
+    const file = req.files.signature || req.files.signatureImage;
+    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+    const ext = path.extname(file.name).toLowerCase();
+    
+    if (!allowedExtensions.includes(ext) || !file.mimetype.startsWith('image/')) {
+      return res.status(400).json({ success: false, message: 'Invalid file type. Allowed: jpg, png, gif, webp' });
+    }
+
+    const businessCheck = await prisma.business.findFirst({
+      where: { id, userId: req.user.id }
+    });
+
+    if (!businessCheck) {
+      return res.status(404).json({ success: false, message: 'Business not found' });
+    }
+
+    const uploadDir = path.join(process.cwd(), 'uploads', 'signatures');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    const fileName = `${id}-sig-${Date.now()}${ext}`;
+    const filePath = path.join(uploadDir, fileName);
+    
+    await file.mv(filePath);
+
+    const signatureUrl = `/uploads/signatures/${fileName}`;
+    
+    const updated = await prisma.business.update({
+      where: { id },
+      data: { signatureImage: signatureUrl },
+    });
+
+    res.json({ success: true, data: { signatureImage: signatureUrl } });
+  } catch (error) {
     next(error);
   }
 });

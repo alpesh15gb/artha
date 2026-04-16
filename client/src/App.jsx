@@ -1,5 +1,5 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuthStore } from './store/auth';
+import { useLocation, Routes, Route, Navigate } from 'react-router-dom';
+import { useAuthStore, useBusinessStore } from './store/auth';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -18,10 +18,26 @@ import Accounts from './pages/Accounts';
 import Reports from './pages/Reports';
 import Import from './pages/Import';
 import Settings from './pages/Settings';
+import SuperAdmin from './pages/SuperAdmin';
+import BusinessOnboarding from './pages/BusinessOnboarding';
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useAuthStore();
-  return isAuthenticated ? children : <Navigate to="/login" />;
+  const { businesses, currentBusiness } = useBusinessStore();
+  const location = useLocation();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" />;
+  }
+
+  // If authenticated but no businesses, and not already on onboarding or superadmin
+  if (businesses.length === 0 && 
+      !location.pathname.startsWith('/onboarding') && 
+      !location.pathname.startsWith('/superadmin')) {
+    return <Navigate to="/onboarding" />;
+  }
+
+  return children;
 }
 
 function App() {
@@ -29,6 +45,7 @@ function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/onboarding" element={<ProtectedRoute><BusinessOnboarding /></ProtectedRoute>} />
       <Route
         path="/*"
         element={
@@ -53,6 +70,7 @@ function App() {
                 <Route path="/reports" element={<Reports />} />
                 <Route path="/import" element={<Import />} />
                 <Route path="/settings" element={<Settings />} />
+                <Route path="/superadmin" element={<SuperAdmin />} />
               </Routes>
             </Layout>
           </ProtectedRoute>

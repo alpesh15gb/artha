@@ -14,14 +14,25 @@ export const useAuthStore = create(
         const { user, token } = response.data.data;
         set({ user, token, isAuthenticated: true });
         api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        
+        // Refresh businesses for the new user
+        await useBusinessStore.getState().fetchBusinesses(true);
+        
         return response.data;
       },
 
       register: async (email, password, name) => {
         const response = await api.post('/auth/register', { email, password, name });
-        const { user, token } = response.data.data;
+        const { user, token, business } = response.data.data;
         set({ user, token, isAuthenticated: true });
         api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        
+        // Also set current business
+        if (business) {
+          useBusinessStore.getState().setCurrentBusiness(business);
+          useBusinessStore.getState().fetchBusinesses();
+        }
+        
         return response.data;
       },
 
@@ -32,6 +43,8 @@ export const useAuthStore = create(
         }
         set({ user: null, token: null, isAuthenticated: false });
         delete api.defaults.headers.common['Authorization'];
+        // Clear business data too
+        useBusinessStore.getState().clearBusinessData();
       },
 
       initAuth: () => {
@@ -53,16 +66,35 @@ export const useBusinessStore = create(
     (set, get) => ({
       currentBusiness: null,
       businesses: [],
+      settings: {},
+      setSettings: (settings) => set({ settings }),
 
       setCurrentBusiness: (business) => set({ currentBusiness: business }),
+      clearBusinessData: () => set({ currentBusiness: null, businesses: [] }),
 
-      fetchBusinesses: async () => {
-        const response = await api.get('/businesses');
-        set({ businesses: response.data.data });
-        if (!get().currentBusiness && response.data.data.length > 0) {
-          set({ currentBusiness: response.data.data[0] });
+      fetchBusinesses: async (forceSelectFirst = false) => {
+        try {
+          const response = await api.get('/businesses');
+          const businesses = response.data.data;
+          set({ businesses });
+          
+          const current = get().currentBusiness;
+          const isValid = current && businesses.some(b => b.id === current.id);
+          
+          if (forceSelectFirst || !isValid) {
+            if (businesses.length > 0) {
+              set({ currentBusiness: businesses[0] });
+            } else {
+              set({ currentBusiness: null });
+            }
+          }
+          return businesses;
+        } catch (error) {
+          if (error.response?.status === 401) {
+             set({ currentBusiness: null, businesses: [] });
+          }
+          throw error;
         }
-        return response.data.data;
       },
     }),
     {

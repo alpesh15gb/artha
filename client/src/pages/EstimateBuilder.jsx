@@ -14,6 +14,9 @@ import api from '../services/api';
 import { useBusinessStore } from '../store/auth';
 import { Button, Input, Select, Card, Badge, cn } from '../components/ui';
 import toast from 'react-hot-toast';
+import { exportToPDF, printElement } from '../utils/export';
+import { EstimateTemplateAlphesh } from '../components/invoices/EstimateTemplateAlphesh';
+
 
 const GST_OPTIONS = [
   { value: 0, label: '0%' },
@@ -206,14 +209,30 @@ function EstimateBuilder() {
            </CollapsibleSection>
 
            <CollapsibleSection title="Estimation Info" icon={FileCheck} active={activeSection === 'schema'} onClick={() => setActiveSection(activeSection === 'schema' ? '' : 'schema')}>
-              <div className="space-y-4 p-5 bg-white rounded-[24px] border border-gray-100 shadow-sm">
-                 <Input label="Estimate Identifier" value={formData.estimateNumber} onChange={(e) => setFormData({ ...formData, estimateNumber: e.target.value })} />
-                 <div className="grid grid-cols-2 gap-4">
-                    <Input label="Quote Date" type="date" value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} />
-                    <Input label="Valid Until" type="date" value={formData.expiryDate} onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })} />
-                 </div>
-              </div>
-           </CollapsibleSection>
+               <div className="space-y-4 p-5 bg-white rounded-[24px] border border-gray-100 shadow-sm">
+                  <Input label="Estimate Identifier" value={formData.estimateNumber} onChange={(e) => setFormData({ ...formData, estimateNumber: e.target.value })} />
+                  <div className="grid grid-cols-2 gap-4">
+                     <Input label="Quote Date" type="date" value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} />
+                     <Input label="Valid Until" type="date" value={formData.expiryDate} onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })} />
+                  </div>
+               </div>
+            </CollapsibleSection>
+
+            <CollapsibleSection title="Terms & Notes" icon={FileText} active={activeSection === 'terms'} onClick={() => setActiveSection(activeSection === 'terms' ? '' : 'terms')}>
+               <div className="space-y-4 p-5 bg-white rounded-[24px] border border-gray-100 shadow-sm">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1 text-xs">Customer Terms & Conditions</label>
+                    <textarea 
+                      className="w-full rounded-2xl border-gray-100 bg-gray-50/50 p-4 text-sm font-medium focus:ring-indigo-500 focus:border-indigo-500 min-h-[120px]"
+                      value={formData.terms}
+                      onChange={(e) => setFormData({ ...formData, terms: e.target.value })}
+                      placeholder="1. Payment 100% in advance...&#10;2. Quote valid for 5 days..."
+                    />
+                  </div>
+               </div>
+            </CollapsibleSection>
+
+
 
            {/* Items List */}
            <div className="space-y-4">
@@ -256,105 +275,38 @@ function EstimateBuilder() {
                <button className="px-6 py-2.5 bg-indigo-600 text-white font-black text-[10px] tracking-widest uppercase rounded-2xl">
                   <Eye className="w-4 h-4 inline mr-2" /> Live Preview
                </button>
-               <button className="px-5 py-2.5 text-gray-500 hover:text-indigo-600 font-bold text-[10px] tracking-widest uppercase">
+                <button 
+                  onClick={() => exportToPDF('print-area', `Estimate_${formData.estimateNumber || 'Draft'}.pdf`)}
+                  className="px-5 py-2.5 text-gray-500 hover:text-indigo-600 font-bold text-[10px] tracking-widest uppercase"
+                >
                   <Download className="w-4 h-4 inline mr-2" /> Download
-               </button>
-               <button className="px-5 py-2.5 text-gray-500 hover:text-indigo-600 font-bold text-[10px] tracking-widest uppercase">
+                </button>
+                <button 
+                  onClick={() => printElement('print-area')}
+                  className="px-5 py-2.5 text-gray-500 hover:text-indigo-600 font-bold text-[10px] tracking-widest uppercase"
+                >
                   <Printer className="w-4 h-4 inline mr-2" /> Print
-               </button>
+                </button>
             </div>
          </div>
 
-         <div className="w-[820px] bg-white shadow-[0_32px_128px_rgba(0,0,0,0.1)] rounded-sm p-16 flex flex-col min-h-[1160px] relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-50 rounded-bl-[128px] -z-0 opacity-50" />
-            
-            <div className="relative z-10">
-               <div className="flex justify-between items-start mb-20">
-                  <div>
-                     <h2 className="text-5xl font-black text-gray-900 tracking-tighter uppercase leading-none">Quotation</h2>
-                     <p className="text-sm font-black text-emerald-600 mt-2 tracking-[0.3em] uppercase">Ref ID #{formData.estimateNumber || 'DRAFT'}</p>
-                  </div>
-                  <div className="text-right">
-                     <div className="w-20 h-20 bg-gradient-to-br from-emerald-600 to-teal-700 rounded-3xl flex items-center justify-center ml-auto mb-6 shadow-2xl">
-                        <span className="text-white font-black text-3xl">A</span>
-                     </div>
-                     <p className="text-xl font-black text-gray-900">{currentBusiness?.name}</p>
-                     <p className="text-sm font-bold text-gray-400 mt-1 uppercase tracking-widest">{currentBusiness?.email}</p>
-                  </div>
-               </div>
-
-               <div className="grid grid-cols-2 gap-16 mb-24">
-                  <div>
-                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Quotation Prepared For</p>
-                     <p className="text-2xl font-black text-gray-900 leading-tight">{selectedParty?.name || 'Customer Entity'}</p>
-                     <p className="text-sm font-bold text-gray-500 mt-2">{selectedParty?.email || 'customer@email.com'}</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-8">
-                     <div>
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Quote Date</p>
-                        <p className="text-sm font-black text-gray-900">{formData.date ? format(new Date(formData.date), 'dd MMM, yyyy') : '-'}</p>
-                     </div>
-                     <div>
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Expiry Date</p>
-                        <p className="text-sm font-black text-rose-500">{formData.expiryDate ? format(new Date(formData.expiryDate), 'dd MMM, yyyy') : '-'}</p>
-                     </div>
-                  </div>
-               </div>
-
-               <div className="flex-1">
-                  <table className="w-full">
-                     <thead>
-                        <tr className="border-b-4 border-gray-900">
-                           <th className="py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Scope Component</th>
-                           <th className="py-6 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest w-20">Quantity</th>
-                           <th className="py-6 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest w-32">Rate</th>
-                           <th className="py-6 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest w-32">Total</th>
-                        </tr>
-                     </thead>
-                     <tbody className="divide-y divide-gray-100">
-                        {items.map((item) => (
-                           <tr key={item.id}>
-                              <td className="py-8 pr-12">
-                                 <p className="text-lg font-black text-gray-900">{item.description || 'Description of work'}</p>
-                                 <p className="text-xs font-bold text-gray-400 uppercase mt-1 tracking-widest">Estimated GST {item.taxRate}%</p>
-                              </td>
-                              <td className="py-8 text-center text-gray-900 font-black">{item.quantity}</td>
-                              <td className="py-8 text-right text-gray-600 font-bold">₹{item.rate?.toLocaleString()}</td>
-                              <td className="py-8 text-right text-xl font-black text-gray-900">₹{((item.quantity || 0) * (item.rate || 0)).toLocaleString()}</td>
-                           </tr>
-                        ))}
-                     </tbody>
-                  </table>
-               </div>
-
-               <div className="mt-20 flex justify-end">
-                  <div className="w-80 space-y-6">
-                     <div className="flex justify-between items-center px-4">
-                        <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Estimated Subtotal</span>
-                        <span className="text-lg font-black text-gray-900">₹{totals.subtotal.toLocaleString()}</span>
-                     </div>
-                     <div className="flex justify-between items-center px-4 text-emerald-600">
-                        <span className="text-xs font-black uppercase tracking-widest">Estimated Tax</span>
-                        <span className="text-lg font-black font-bold">₹{totals.tax.toLocaleString()}</span>
-                     </div>
-                     <div className="p-6 bg-gray-900 rounded-[24px] flex justify-between items-center text-white shadow-2xl">
-                        <span className="text-xs font-black uppercase tracking-widest opacity-60">Estimated Total</span>
-                        <span className="text-3xl font-black">₹{totals.total.toLocaleString()}</span>
-                     </div>
-                  </div>
-               </div>
-
-               <div className="mt-32 pt-16 border-t border-gray-100 flex justify-between items-end">
-                  <div className="max-w-xs">
-                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 italic">* This quotation is for estimation purposes only. All prices are subject to change based on the final scope of work.</p>
-                     <p className="text-xs font-bold text-emerald-600 flex items-center gap-2 uppercase tracking-widest"><FileCheck className="w-4 h-4" /> Valid for 30 days</p>
-                  </div>
-                  <div className="text-right">
-                     <div className="h-16 w-48 border-b-2 border-gray-900 mb-4 ml-auto" />
-                     <p className="text-xs font-black text-gray-900 uppercase tracking-[0.2em]">Authorized Approver</p>
-                  </div>
-               </div>
-            </div>
+         <div className="w-[820px] bg-white shadow-[0_32px_128px_rgba(0,0,0,0.1)] rounded-sm p-4 flex flex-col min-h-[1160px] relative overflow-hidden">
+            <EstimateTemplateAlphesh 
+              invoice={formData}
+              business={currentBusiness}
+              party={selectedParty}
+              items={items.map(i => ({
+                ...i,
+                totalAmount: (i.quantity || 0) * (i.rate || 0) * (1 - (i.discountPercent || 0) / 100) * (1 + (i.taxRate || 0) / 100)
+              }))}
+              totals={{
+                subtotal: totals.subtotal,
+                cgst: totals.tax / 2, // Simplified for preview
+                sgst: totals.tax / 2,
+                igst: 0,
+                total: totals.total
+              }}
+            />
          </div>
       </div>
     </div>

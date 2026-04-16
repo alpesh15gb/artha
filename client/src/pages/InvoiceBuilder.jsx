@@ -7,13 +7,15 @@ import {
   ChevronLeft, ChevronDown, ChevronRight, Search, 
   Calendar, CreditCard, FileText, User, ShoppingBag,
   Percent, Hash, AlertCircle, CheckCircle2, MoreVertical,
-  MinusCircle, Building2, Eye, ExternalLink
+  MinusCircle, Building2, Eye, ExternalLink, Layout, Tag
 } from 'lucide-react';
 import { format } from 'date-fns';
 import api from '../services/api';
 import { useBusinessStore } from '../store/auth';
 import { Button, Input, Select, Card, Badge, cn } from '../components/ui';
 import toast from 'react-hot-toast';
+import { numberToWords } from '../utils/numberToWords';
+import { InvoiceTemplate1, InvoiceTemplate2, InvoiceTemplate3 } from '../components/invoices';
 
 const GST_OPTIONS = [
   { value: 0, label: '0%' },
@@ -39,8 +41,16 @@ function InvoiceBuilder() {
     notes: '',
     terms: '',
     status: 'DRAFT',
-    invoiceType: 'TAX_INVOICE'
+    invoiceType: 'TAX_INVOICE',
+    template: 'template1',
+    tags: [],
+    stateOfSupply: '',
+    amountInWords: '',
+    reverseCharge: false,
+    paidAmount: 0
   });
+
+  const [previewTemplate, setPreviewTemplate] = useState('template1');
 
   const [items, setItems] = useState([
     { id: Math.random().toString(36).substr(2, 9), itemId: '', description: '', hsnCode: '', quantity: 1, unit: 'NOS', rate: 0, taxRate: 18, discountPercent: 0 }
@@ -79,8 +89,11 @@ function InvoiceBuilder() {
         notes: inv.notes || '',
         terms: inv.terms || '',
         status: inv.status,
-        invoiceType: inv.invoiceType
+        invoiceType: inv.invoiceType,
+        template: inv.template || 'template1',
+        tags: inv.tags || []
       });
+      setPreviewTemplate(inv.template || 'template1');
       setItems(inv.items.map(i => ({
         ...i,
         id: i.id || Math.random().toString(36).substr(2, 9),
@@ -98,13 +111,18 @@ function InvoiceBuilder() {
       const discount = amount * ((item.discountPercent || 0) / 100);
       const taxable = amount - discount;
       const taxAmount = taxable * ((item.taxRate || 0) / 100);
+      const cgst = taxAmount / 2;
+      const sgst = taxAmount / 2;
       
       return {
         subtotal: acc.subtotal + taxable,
         tax: acc.tax + taxAmount,
+        cgst: acc.cgst + cgst,
+        sgst: acc.sgst + sgst,
+        igst: acc.igst,
         total: acc.total + taxable + taxAmount
       };
-    }, { subtotal: 0, tax: 0, total: 0 });
+    }, { subtotal: 0, tax: 0, cgst: 0, sgst: 0, igst: 0, total: 0 });
   }, [items]);
 
   const updateItem = (id, field, value) => {
@@ -142,13 +160,22 @@ function InvoiceBuilder() {
     if (!formData.partyId) return toast.error('Please select a party');
     const payload = {
       ...formData,
+      template: previewTemplate,
       businessId: currentBusiness.id,
+      billingAddress: selectedParty?.billingAddress || selectedParty?.address || {},
+      shippingAddress: selectedParty?.shippingAddress || selectedParty?.address || {},
       subtotal: totals.subtotal,
+      cgstAmount: totals.cgst,
+      sgstAmount: totals.sgst,
       totalAmount: totals.total,
       balanceDue: totals.total,
+      amountInWords: numberToWords(Math.round(totals.total)),
+      stateOfSupply: selectedParty?.state || currentBusiness?.state || '',
       items: items.map(i => {
         const taxableAmount = (i.quantity || 0) * (i.rate || 0) * (1 - (i.discountPercent || 0) / 100);
         const halfTax = i.taxRate / 2;
+        const cgstAmt = taxableAmount * halfTax / 100;
+        const sgstAmt = taxableAmount * halfTax / 100;
         return {
           itemId: i.itemId || null,
           description: i.description,
@@ -159,9 +186,9 @@ function InvoiceBuilder() {
           taxableAmount,
           cgstRate: halfTax,
           sgstRate: halfTax,
-          cgstAmount: taxableAmount * (halfTax / 100),
-          sgstAmount: taxableAmount * (halfTax / 100),
-          totalAmount: taxableAmount * (1 + i.taxRate / 100)
+          cgstAmount: cgstAmt,
+          sgstAmount: sgstAmt,
+          totalAmount: taxableAmount + cgstAmt + sgstAmt
         };
       })
     };
@@ -231,6 +258,39 @@ function InvoiceBuilder() {
               </div>
            </CollapsibleSection>
 
+           {/* Section 2.5: Tags */}
+           <CollapsibleSection title="Categorization Tags" icon={Tag} active={activeSection === 'tags'} onClick={() => setActiveSection(activeSection === 'tags' ? '' : 'tags')}>
+              <div className="space-y-4 p-5 bg-white rounded-[24px] border border-gray-100 shadow-sm">
+                 <div className="flex flex-wrap gap-2 mb-2">
+                    {formData.tags?.map((tag, i) => (
+                       <span key={i} className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold flex items-center gap-2 border border-indigo-100 uppercase tracking-wider">
+                          {tag}
+                          <button onClick={() => setFormData({ ...formData, tags: formData.tags.filter((_, j) => i !== j) })} className="hover:text-red-500">×</button>
+                       </span>
+                    ))}
+                    {formData.tags?.length === 0 && <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest italic px-1">No tags added</span>}
+                 </div>
+                 <div className="relative">
+                    <Input 
+                       placeholder="Type tag & press enter..." 
+                       className="!pl-10 !rounded-xl"
+                       onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                             e.preventDefault();
+                             const val = e.target.value.trim();
+                             if (val && !formData.tags.includes(val)) {
+                                setFormData({ ...formData, tags: [...formData.tags, val] });
+                                e.target.value = '';
+                             }
+                          }
+                       }}
+                    />
+                    <Plus className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                 </div>
+                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest px-1">Tip: Use tags for grouping projects or sites</p>
+              </div>
+           </CollapsibleSection>
+
            {/* Section 3: Items */}
            <div className="space-y-4">
               <div className="flex items-center justify-between px-2">
@@ -267,125 +327,66 @@ function InvoiceBuilder() {
 
       {/* Right Pane - Visual Preview */}
       <div className="flex-1 bg-[#f1f3f6] flex flex-col items-center overflow-y-auto no-scrollbar pb-24 relative">
-         {/* Floating Glass Toolbar */}
-         <div className="sticky top-8 z-30 mb-8">
-            <div className="glass shadow-2xl rounded-3xl p-2 px-3 flex items-center gap-2 border-white/40 border">
-               <button className="px-6 py-2.5 bg-indigo-600 text-white font-black text-[10px] tracking-widest uppercase rounded-2xl shadow-lg shadow-indigo-500/30">
-                  <Eye className="w-4 h-4 inline mr-2" /> Live Preview
-               </button>
-               <button className="px-5 py-2.5 text-gray-500 hover:text-indigo-600 font-bold text-[10px] tracking-widest uppercase transition-all">
-                  <Download className="w-4 h-4 inline mr-2" /> Download
-               </button>
-               <button className="px-5 py-2.5 text-gray-500 hover:text-indigo-600 font-bold text-[10px] tracking-widest uppercase transition-all">
-                  <Printer className="w-4 h-4 inline mr-2" /> Print
-               </button>
-               <div className="w-px h-6 bg-gray-200 mx-2" />
-               <button className="p-2.5 text-gray-400 hover:text-indigo-600 transition-colors">
-                  <MoreVertical className="w-5 h-5" />
-               </button>
+         {/* Template Selector */}
+         <div className="sticky top-8 z-30 mb-4 w-[820px]">
+            <div className="glass shadow-2xl rounded-2xl p-2 flex items-center justify-between border-white/40 border">
+               <div className="flex items-center gap-2 px-2">
+                  <Layout className="w-4 h-4 text-gray-500" />
+                  <span className="text-xs font-bold text-gray-500 mr-4">Template:</span>
+                  {['template1', 'template2', 'template3'].map((t) => (
+                     <button
+                        key={t}
+                        onClick={() => setPreviewTemplate(t)}
+                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                           previewTemplate === t 
+                              ? 'bg-indigo-600 text-white shadow-lg' 
+                              : 'text-gray-500 hover:bg-gray-100'
+                        }`}
+                     >
+                        {t.replace('template', 'Format ')}
+                     </button>
+                  ))}
+               </div>
+               <div className="flex items-center gap-2">
+                  <button className="px-5 py-2.5 text-gray-500 hover:text-indigo-600 font-bold text-[10px] tracking-widest uppercase transition-all">
+                     <Download className="w-4 h-4 inline mr-2" /> Download
+                  </button>
+                  <button className="px-5 py-2.5 text-gray-500 hover:text-indigo-600 font-bold text-[10px] tracking-widest uppercase transition-all">
+                     <Printer className="w-4 h-4 inline mr-2" /> Print
+                  </button>
+               </div>
             </div>
          </div>
 
-         {/* A4 Sheet */}
-         <div className="w-[820px] bg-white shadow-[0_32px_128px_rgba(0,0,0,0.1)] rounded-sm p-16 flex flex-col min-h-[1160px] relative overflow-hidden">
-            {/* Design Elements */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50 rounded-bl-[128px] -z-0 opacity-50" />
-            
-            <div className="relative z-10">
-               <div className="flex justify-between items-start mb-20">
-                  <div>
-                     <h2 className="text-5xl font-black text-gray-900 tracking-tighter uppercase leading-none">Invoice</h2>
-                     <p className="text-sm font-black text-indigo-600 mt-2 tracking-[0.3em] uppercase">Document Master #{formData.invoiceNumber || 'DRAFT'}</p>
-                  </div>
-                  <div className="text-right">
-                     <div className="w-20 h-20 bg-gradient-to-br from-indigo-600 to-purple-700 rounded-3xl flex items-center justify-center ml-auto mb-6 shadow-2xl">
-                        <span className="text-white font-black text-3xl">A</span>
-                     </div>
-                     <p className="text-xl font-black text-gray-900">{currentBusiness?.name}</p>
-                     <p className="text-sm font-bold text-gray-400 mt-1 uppercase tracking-widest">GSTIN: {currentBusiness?.gstin || '-'}</p>
-                  </div>
-               </div>
-
-               <div className="grid grid-cols-2 gap-16 mb-24">
-                  <div>
-                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Invoice Issued For</p>
-                     <p className="text-2xl font-black text-gray-900 leading-tight">{selectedParty?.name || 'Customer Name'}</p>
-                     <p className="text-sm font-bold text-gray-500 mt-2">{selectedParty?.email || 'customer@email.com'}</p>
-                     <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">VAT/GST: {selectedParty?.gstin || 'Unregistered'}</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-8">
-                     <div>
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Issue Date</p>
-                        <p className="text-sm font-black text-gray-900">{formData.date ? format(new Date(formData.date), 'dd MMM, yyyy') : '-'}</p>
-                     </div>
-                     <div>
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Balance Due</p>
-                        <p className="text-sm font-black text-rose-500">{formData.dueDate ? format(new Date(formData.dueDate), 'dd MMM, yyyy') : '-'}</p>
-                     </div>
-                  </div>
-               </div>
-
-               <div className="flex-1">
-                  <table className="w-full">
-                     <thead>
-                        <tr className="border-b-4 border-gray-900">
-                           <th className="py-6 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Description</th>
-                           <th className="py-6 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest w-20">Quantity</th>
-                           <th className="py-6 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest w-32">Unit Price</th>
-                           <th className="py-6 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest w-32">Amount</th>
-                        </tr>
-                     </thead>
-                     <tbody className="divide-y divide-gray-100">
-                        {items.map((item) => (
-                           <tr key={item.id}>
-                              <td className="py-8 pr-12">
-                                 <p className="text-lg font-black text-gray-900">{item.description || 'Service/Product Item'}</p>
-                                 <p className="text-xs font-bold text-gray-400 uppercase mt-1 tracking-widest">HSN: {item.hsnCode || 'N/A'} • GST {item.taxRate}%</p>
-                              </td>
-                              <td className="py-8 text-center text-gray-900 font-black">{item.quantity}</td>
-                              <td className="py-8 text-right text-gray-600 font-bold">₹{item.rate?.toLocaleString()}</td>
-                              <td className="py-8 text-right text-xl font-black text-gray-900">₹{((item.quantity || 0) * (item.rate || 0)).toLocaleString()}</td>
-                           </tr>
-                        ))}
-                     </tbody>
-                  </table>
-               </div>
-
-               <div className="mt-20 flex justify-end">
-                  <div className="w-80 space-y-6">
-                     <div className="flex justify-between items-center px-4">
-                        <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Subtotal</span>
-                        <span className="text-lg font-black text-gray-900">₹{totals.subtotal.toLocaleString()}</span>
-                     </div>
-                     <div className="flex justify-between items-center px-4">
-                        <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Total Tax (GST)</span>
-                        <span className="text-lg font-black text-gray-900">₹{totals.tax.toLocaleString()}</span>
-                     </div>
-                     <div className="p-6 bg-gray-900 rounded-[24px] flex justify-between items-center text-white shadow-2xl">
-                        <span className="text-xs font-black uppercase tracking-widest opacity-60">Total Amount</span>
-                        <span className="text-3xl font-black">₹{totals.total.toLocaleString()}</span>
-                     </div>
-                  </div>
-               </div>
-
-               <div className="mt-40 flex justify-between items-end border-t border-gray-100 pt-16">
-                  <div className="space-y-4">
-                     <div>
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Payment Instructions</p>
-                        <p className="text-sm font-black text-gray-900">{currentBusiness?.bankDetails?.bankName || 'Direct Bank Transfer'}</p>
-                        <p className="text-xs font-bold text-gray-500 uppercase">AC: {currentBusiness?.bankDetails?.accountNumber || '502000-XXXXXXXX'}</p>
-                        <p className="text-xs font-bold text-gray-500 uppercase">IFSC: {currentBusiness?.bankDetails?.ifscCode || 'ARTHA0001'}</p>
-                     </div>
-                     <div className="flex items-center gap-2 text-[10px] font-bold text-indigo-600 uppercase tracking-widest">
-                        <ExternalLink className="w-3 h-3" /> Pay online via secure link
-                     </div>
-                  </div>
-                  <div className="text-right">
-                     <div className="h-16 w-48 border-b-2 border-gray-900 mb-4 ml-auto" />
-                     <p className="text-xs font-black text-gray-900 uppercase tracking-[0.2em]">Authorized Signatory</p>
-                  </div>
-               </div>
-            </div>
+         {/* Invoice Template */}
+         <div className="overflow-auto max-h-[calc(100vh-200px)]">
+            {previewTemplate === 'template1' && (
+               <InvoiceTemplate1 
+                  invoice={formData} 
+                  business={currentBusiness} 
+                  party={selectedParty} 
+                  items={items} 
+                  totals={totals} 
+               />
+            )}
+            {previewTemplate === 'template2' && (
+               <InvoiceTemplate2 
+                  invoice={formData} 
+                  business={currentBusiness} 
+                  party={selectedParty} 
+                  items={items} 
+                  totals={totals} 
+               />
+            )}
+            {previewTemplate === 'template3' && (
+               <InvoiceTemplate3 
+                  invoice={formData} 
+                  business={currentBusiness} 
+                  party={selectedParty} 
+                  items={items} 
+                  totals={totals} 
+               />
+            )}
          </div>
       </div>
     </div>

@@ -11,6 +11,12 @@ import AdmZip from 'adm-zip';
 const router = Router();
 const prisma = new PrismaClient();
 
+function safeFloat(value) {
+  if (value === null || value === undefined || value === '') return 0;
+  const parsed = parseFloat(value);
+  return isNaN(parsed) ? 0 : parsed;
+}
+
 router.use(authenticate);
 router.use(verifyBusinessOwnership);
 
@@ -74,7 +80,6 @@ async function processImport(filePath, businessId, importLogId) {
   
   try {
     const ext = path.extname(filePath).toLowerCase();
-    console.log('Processing import file:', ext);
     
     if (ext === '.json') {
       const content = fs.readFileSync(filePath, 'utf-8');
@@ -84,11 +89,9 @@ async function processImport(filePath, businessId, importLogId) {
       try {
         const zip = new AdmZip(filePath);
         const entries = zip.getEntries();
-        console.log('ZIP entries:', entries.map(e => e.entryName));
         
         const vypEntry = entries.find(e => e.entryName.endsWith('.vyp'));
         if (vypEntry) {
-          console.log('Found .vyp entry:', vypEntry.entryName);
           const tempDbPath = path.join(path.dirname(filePath), `${uuidv4()}.vyp`);
           const zipData = zip.readFile(vypEntry);
           fs.writeFileSync(tempDbPath, zipData);
@@ -100,7 +103,6 @@ async function processImport(filePath, businessId, importLogId) {
           throw new Error('No .vyp file found in ZIP');
         }
       } catch (zipError) {
-        console.log('Not a ZIP or ZIP error, trying as direct SQLite:', zipError.message);
         db = new Database(filePath, { readonly: true });
         await importFromSqlite(db, businessId, importLogId);
       }

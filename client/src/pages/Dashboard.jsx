@@ -153,7 +153,7 @@ function Dashboard() {
                   </div>
                   <div className="flex-1">
                     <p className="text-sm font-bold text-gray-900">Invoice #{inv.invoiceNumber}</p>
-                    <p className="text-xs text-gray-400 font-medium">{inv.partyName}</p>
+                    <p className="text-xs text-gray-400 font-medium">{inv.party?.name || inv.partyName || 'No Party'}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-black text-gray-900">₹{inv.totalAmount?.toLocaleString()}</p>

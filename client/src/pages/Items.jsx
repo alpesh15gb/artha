@@ -264,16 +264,19 @@ function ItemModal({ isOpen, onClose, item, businessId }) {
 
         <div className="p-4 bg-indigo-50/30 rounded-2xl border border-indigo-100/50">
            <p className="text-xs font-black text-indigo-600 uppercase tracking-widest mb-4">Pricing & Stock</p>
-           <div className="grid grid-cols-3 gap-4">
-              <Input label="Selling Price" name="sellingPrice" type="number" defaultValue={item?.sellingPrice} />
-              <Input label="Purchase Price" name="purchasePrice" type="number" defaultValue={item?.purchasePrice} />
-              <Input label="Tax Rate (%)" name="taxRate" type="number" defaultValue={item?.taxRate || 18} />
+           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <Input label="MRP" name="mrp" type="number" defaultValue={item?.mrp} />
+              <Input label="Sale Price" name="sellingPrice" type="number" defaultValue={item?.sellingPrice} />
+              <Input label="Pur. Price" name="purchasePrice" type="number" defaultValue={item?.purchasePrice} />
+              <Input label="Tax (%)" name="taxRate" type="number" defaultValue={item?.taxRate || 18} />
            </div>
-           <div className="grid grid-cols-3 gap-4 mt-4">
-              <Input label="Opening Stock" name="openingStock" type="number" defaultValue={item?.openingStock || 0} />
-              <Input label="Current Stock" name="currentStock" type="number" defaultValue={item?.currentStock || 0} />
-              <Input label="Min Alert level" name="reorderLevel" type="number" defaultValue={item?.reorderLevel || 0} />
-           </div>
+           {!item?.isService && (
+             <div className="grid grid-cols-3 gap-4 mt-4">
+                <Input label="Opening" name="openingStock" type="number" defaultValue={item?.openingStock || 0} />
+                <Input label="In Stock" name="currentStock" type="number" defaultValue={item?.currentStock || 0} />
+                <Input label="Reorder at" name="reorderLevel" type="number" defaultValue={item?.reorderLevel || 0} />
+             </div>
+           )}
         </div>
 
         <div className="flex justify-end pt-4 gap-3">

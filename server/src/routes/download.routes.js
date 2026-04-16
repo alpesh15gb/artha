@@ -171,21 +171,31 @@ async function generateInvoicePDF(invoice, business, party, items, res) {
     tableY += 15;
   }
   
-  if (cgstTotal > 0) {
-    doc.text('CGST:', 380, tableY);
-    doc.text(formatCurrency(cgstTotal), 455, tableY);
-    tableY += 15;
+  if (business?.settings?.showTaxBreakup !== false) {
+    if (cgstTotal > 0) {
+      doc.text('CGST:', 380, tableY);
+      doc.text(formatCurrency(cgstTotal), 455, tableY);
+      tableY += 15;
+    }
+    if (sgstTotal > 0) {
+      doc.text('SGST:', 380, tableY);
+      doc.text(formatCurrency(sgstTotal), 455, tableY);
+      tableY += 15;
+    }
+    if (igstTotal > 0) {
+      doc.text('IGST:', 380, tableY);
+      doc.text(formatCurrency(igstTotal), 455, tableY);
+      tableY += 15;
+    }
+  } else {
+    const totalTax = cgstTotal + sgstTotal + igstTotal;
+    if (totalTax > 0) {
+      doc.text('Total Tax:', 380, tableY);
+      doc.text(formatCurrency(totalTax), 455, tableY);
+      tableY += 15;
+    }
   }
-  if (sgstTotal > 0) {
-    doc.text('SGST:', 380, tableY);
-    doc.text(formatCurrency(sgstTotal), 455, tableY);
-    tableY += 15;
-  }
-  if (igstTotal > 0) {
-    doc.text('IGST:', 380, tableY);
-    doc.text(formatCurrency(igstTotal), 455, tableY);
-    tableY += 15;
-  }
+
   if (invoice.cessAmount > 0) {
     doc.text('Cess:', 380, tableY);
     doc.text(formatCurrency(invoice.cessAmount), 455, tableY);
@@ -221,6 +231,20 @@ async function generateInvoicePDF(invoice, business, party, items, res) {
     tableY += 12;
     if (bank.ifscCode) doc.text(`IFSC: ${bank.ifscCode}`, 40, tableY);
     if (bank.branch) doc.text(`Branch: ${bank.branch}`, 200, tableY);
+    tableY += 15;
+  }
+  
+  // UPI QR Code
+  if (business?.settings?.showQrCode !== false && business?.upiId) {
+    tableY += 15;
+    doc.fontSize(10).font('Helvetica-Bold').fillColor('#1a1a1a').text('Scan to Pay:', 40, tableY);
+    try {
+      const QRCode = (await import('qrcode')).default;
+      const upiUrl = `upi://pay?pa=${business.upiId}&pn=${encodeURIComponent(business.name)}&am=${invoice.totalAmount}&cu=INR`;
+      const qrBuffer = await QRCode.toBuffer(upiUrl, { width: 80, margin: 1 });
+      doc.image(qrBuffer, 40, tableY + 15, { width: 80 });
+      tableY += 100; // adjust for next elements
+    } catch(e) { console.error('QR code error', e); }
   }
   
   // Notes
@@ -242,7 +266,18 @@ async function generateInvoicePDF(invoice, business, party, items, res) {
   // Signature Area
   doc.fontSize(10).font('Helvetica').fillColor('#1a1a1a');
   doc.text('For, ' + (business?.name || 'Company'), 400, 700, { align: 'right' });
-  doc.moveTo(400, 750).lineTo(560, 750).stroke('#333333');
+  
+  if (business?.settings?.showSignature !== false && business?.signatureImage) {
+    try {
+      const sigPath = path.join(process.cwd(), business.signatureImage.replace(/^\//, ''));
+      if (fs.existsSync(sigPath)) {
+        doc.image(sigPath, 450, 715, { width: 100, height: 35 });
+      }
+    } catch(e) { console.error('Signature load error', e); }
+  } else {
+    doc.moveTo(400, 750).lineTo(560, 750).stroke('#333333');
+  }
+  
   doc.text('Authorized Signatory', 400, 755, { align: 'right' });
   
   // Footer

@@ -148,10 +148,10 @@ function Parties() {
                    </div>
                 </td>
                 <td className="px-8 py-6 text-right">
-                   <p className={cn("text-sm font-black tracking-tight", party.balanceType === 'RECEIVABLE' ? 'text-emerald-600' : 'text-rose-500')}>
-                      {party.balanceType === 'RECEIVABLE' ? '+' : '-'} ₹{party.openingBalance?.toLocaleString()}
+                   <p className={cn("text-sm font-black tracking-tight", (party.currentBalance ?? party.openingBalance) >= 0 ? 'text-emerald-600' : 'text-rose-500')}>
+                      {(party.currentBalance ?? party.openingBalance) >= 0 ? '+' : '-'} ₹{Math.abs(party.currentBalance ?? party.openingBalance)?.toLocaleString()}
                    </p>
-                   <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5 tracking-widest">{party.balanceType}</p>
+                   <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5 tracking-widest">{party.currentBalanceType ?? party.balanceType}</p>
                 </td>
                 <td className="px-8 py-6 text-right">
                   <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -196,15 +196,11 @@ function PartyModal({ isOpen, onClose, item, businessId }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    const data = {
-      name: formData.get('name'),
-      phone: formData.get('phone'),
-      email: formData.get('email'),
-      gstin: formData.get('gstin'),
-      partyType: formData.get('partyType'),
-      openingBalance: parseFloat(formData.get('openingBalance')) || 0,
-      balanceType: formData.get('balanceType'),
-    };
+    const data = Object.fromEntries(
+      Array.from(formData.entries()).filter(([_, value]) => value !== '')
+    );
+    if (data.openingBalance) data.openingBalance = parseFloat(data.openingBalance);
+    
     mutation.mutate(data);
   };
 
