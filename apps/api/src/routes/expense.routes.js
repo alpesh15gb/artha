@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.js';
 import { verifyBusinessOwnership } from '../middleware/businessAuth.js';
+import { checkTransactionLock } from '../middleware/transactionLock.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -67,7 +68,7 @@ router.get('/business/:businessId', async (req, res, next) => {
   }
 });
 
-router.post('/', async (req, res, next) => {
+router.post('/', checkTransactionLock('expense'), async (req, res, next) => {
   try {
     const data = createExpenseSchema.parse(req.body);
     
@@ -190,7 +191,7 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-router.patch('/:id', async (req, res, next) => {
+router.patch('/:id', checkTransactionLock('expense'), async (req, res, next) => {
   try {
     const check = await prisma.expense.findFirst({
       where: { id: req.params.id, business: { userId: req.user.id } },

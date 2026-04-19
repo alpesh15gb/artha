@@ -98,6 +98,18 @@ class ArthaService {
     const res = await this.client.get(`/purchases/business/${businessId}`);
     return res.data;
   }
+
+  // Expenses
+  async getExpenses(businessId) {
+    const res = await this.client.get(`/expenses/business/${businessId}`);
+    return res.data;
+  }
+
+  // Settings
+  async getSettings(businessId) {
+    const res = await this.client.get(`/settings/${businessId}`);
+    return res.data;
+  }
 }
 
 export const arthaService = new ArthaService(API_BASE_URL);

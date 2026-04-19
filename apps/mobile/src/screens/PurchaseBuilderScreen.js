@@ -18,6 +18,7 @@ const PurchaseBuilderScreen = ({ onBack, onSaveSuccess }) => {
   const [catalog, setCatalog] = useState([]);
   const [partyModal, setPartyModal] = useState(false);
   const [itemModal, setItemModal] = useState(false);
+  const [lockDate, setLockDate] = useState(null);
   
   const [docData, setDocData] = useState({
     partyId: '',
@@ -36,12 +37,16 @@ const PurchaseBuilderScreen = ({ onBack, onSaveSuccess }) => {
       const bizRes = await arthaService.client.get('/businesses');
       const bizId = bizRes.data.data?.[0]?.id;
       if (bizId) {
-        const [pRes, iRes] = await Promise.all([
+        const [pRes, iRes, sRes] = await Promise.all([
           arthaService.client.get(`/parties/business/${bizId}`),
           arthaService.client.get(`/items/business/${bizId}`),
+          arthaService.getSettings(bizId)
         ]);
         setParties(pRes.data.data || []);
         setCatalog(iRes.data.data || []);
+        if (sRes.data?.enableFinancialLock) {
+          setLockDate(new Date(sRes.data.lockDate));
+        }
       }
     } catch (e) { console.error('Bootstrap:', e); }
   };
@@ -73,6 +78,12 @@ const PurchaseBuilderScreen = ({ onBack, onSaveSuccess }) => {
 
   const handleSave = async () => {
     if (!docData.partyId) return Alert.alert('Required', 'Please select a supplier');
+
+    const selDate = new Date(docData.date);
+    if (lockDate && selDate <= lockDate) {
+      return Alert.alert('Locked', 'This date falls within a locked financial period.');
+    }
+
     setLoading(true);
     try {
       const bizRes = await arthaService.client.get('/businesses');

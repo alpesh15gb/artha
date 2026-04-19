@@ -3,6 +3,7 @@ import { z } from "zod";
 import prisma from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.js";
 import { verifyBusinessOwnership } from "../middleware/businessAuth.js";
+import { checkTransactionLock } from "../middleware/transactionLock.js";
 import { calculateDocumentTotals } from "../../../../packages/common/src/index.js";
 
 const router = Router();
@@ -158,7 +159,7 @@ router.get("/business/:businessId", async (req, res, next) => {
   }
 });
 
-router.post("/", async (req, res, next) => {
+router.post("/", checkTransactionLock("invoice"), async (req, res, next) => {
   try {
     const data = createInvoiceSchema.parse(req.body);
 
@@ -175,6 +176,20 @@ router.post("/", async (req, res, next) => {
     }
 
     const result = await prisma.$transaction(async (tx) => {
+      // 1.5 Verify item IDs exist for this business to prevent FK violations
+      const itemIds = data.items.map(i => i.itemId).filter(Boolean);
+      if (itemIds.length > 0) {
+        const dbItems = await tx.item.findMany({
+          where: { id: { in: itemIds }, businessId: data.businessId },
+          select: { id: true }
+        });
+        const validIds = new Set(dbItems.map(i => i.id));
+        data.items = data.items.map(item => ({
+          ...item,
+          itemId: item.itemId && validIds.has(item.itemId) ? item.itemId : null
+        }));
+      }
+
       // 2. Uniqueness Check
       const existing = await tx.invoice.findFirst({
         where: { businessId: data.businessId, invoiceNumber: data.invoiceNumber }
@@ -329,7 +344,7 @@ router.get("/:id", async (req, res, next) => {
   }
 });
 
-router.put("/:id", async (req, res, next) => {
+router.put("/:id", checkTransactionLock("invoice"), async (req, res, next) => {
   try {
     const data = createInvoiceSchema.parse(req.body);
     const { id } = req.params;
@@ -475,7 +490,7 @@ router.put("/:id/status", async (req, res, next) => {
   }
 });
 
-router.post("/:id/payment", async (req, res, next) => {
+router.post("/:id/payment", checkTransactionLock("invoice"), async (req, res, next) => {
   try {
     const data = recordPaymentSchema.parse(req.body);
 
@@ -566,7 +581,7 @@ router.post("/:id/payment", async (req, res, next) => {
   }
 });
 
-router.delete("/:id", async (req, res, next) => {
+router.delete("/:id", checkTransactionLock("invoice"), async (req, res, next) => {
   try {
     const { id } = req.params;
 

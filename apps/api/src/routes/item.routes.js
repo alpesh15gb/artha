@@ -31,7 +31,7 @@ router.get("/business/:businessId", async (req, res, next) => {
       ...(inStock === "true" && { currentStock: { gt: 0 } }),
     };
 
-    const [items, total] = await Promise.all([
+    const [items, total, defaultItems] = await Promise.all([
       prisma.item.findMany({
         where,
         orderBy: { name: "asc" },
@@ -39,16 +39,24 @@ router.get("/business/:businessId", async (req, res, next) => {
         take: Number(limit),
       }),
       prisma.item.count({ where }),
+      prisma.defaultItem.findMany({
+        orderBy: { name: "asc" },
+      }),
     ]);
+
+    const data = [
+      ...items,
+      ...defaultItems.map(d => ({ ...d, id: d.id, isDefault: true })),
+    ];
 
     res.json({
       success: true,
-      data: items,
+      data,
       pagination: {
         page: Number(page),
         limit: Number(limit),
-        total,
-        pages: Math.ceil(total / limit),
+        total: total + defaultItems.length,
+        pages: Math.ceil((total + defaultItems.length) / limit),
       },
     });
   } catch (error) {

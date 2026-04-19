@@ -29,10 +29,15 @@ const DocumentBuilderScreen = ({ type = 'INVOICE', initialData = null, onBack, o
   const [businessId, setBusinessId] = useState(null);
   const [partyModal, setPartyModal] = useState(false);
   const [itemModal, setItemModal] = useState(false);
+  const [lockDate, setLockDate] = useState(null);
   const [partySearch, setPartySearch] = useState('');
   const [itemSearch, setItemSearch] = useState('');
   const [dateInput, setDateInput] = useState('');   // editable text "DD/MM/YYYY"
   const [dueDateInput, setDueDateInput] = useState('');
+  const [newPartyType, setNewPartyType] = useState('CUSTOMER');
+  const [newItemData, setNewItemData] = useState({ name: '', rate: '', taxRate: 18, unit: 'NOS' });
+  const [showNewParty, setShowNewParty] = useState(false);
+  const [showNewItem, setShowNewItem] = useState(false);
 
   const isEdit = !!initialData?.id;
   const typeLabel = type === 'INVOICE' ? 'Invoice' : 'Estimate';
@@ -78,12 +83,16 @@ const DocumentBuilderScreen = ({ type = 'INVOICE', initialData = null, onBack, o
       const bizId = bizRes.data.data?.[0]?.id;
       if (bizId) {
         setBusinessId(bizId);
-        const [pRes, iRes] = await Promise.all([
+        const [pRes, iRes, sRes] = await Promise.all([
           arthaService.client.get(`/parties/business/${bizId}`),
           arthaService.client.get(`/items/business/${bizId}`),
+          arthaService.getSettings(bizId)
         ]);
         setParties(pRes.data.data || []);
         setCatalog(iRes.data.data || []);
+        if (sRes.data?.enableFinancialLock) {
+          setLockDate(new Date(sRes.data.lockDate));
+        }
       }
     } catch (e) { console.error('Bootstrap:', e); }
     finally { setLoading(false); }
@@ -108,6 +117,26 @@ const DocumentBuilderScreen = ({ type = 'INVOICE', initialData = null, onBack, o
     setItemModal(false);
   };
 
+  const createAndAddItem = async () => {
+    if (!newItemData.name.trim()) return;
+    setSaving(true);
+    try {
+      const res = await arthaService.client.post('/items', {
+        businessId,
+        name: newItemData.name,
+        sellingPrice: parseFloat(newItemData.rate) || 0,
+        taxRate: parseFloat(newItemData.taxRate) || 18,
+        unit: newItemData.unit || 'NOS',
+      });
+      if (res.data.success) {
+        addItem({ ...res.data.data, sellingPrice: res.data.data.sellingPrice });
+      }
+      setNewItemData({ name: '', rate: '', taxRate: 18, unit: 'NOS' });
+      setShowNewItem(false);
+    } catch (e) { console.error('Create item:', e); }
+    finally { setSaving(false); }
+  };
+
   const removeItem = (idx) => setDocData(p => ({ ...p, items: p.items.filter((_, i) => i !== idx) }));
 
   const updateItem = (idx, field, value) =>
@@ -129,9 +158,30 @@ const DocumentBuilderScreen = ({ type = 'INVOICE', initialData = null, onBack, o
   };
 
   const handleSave = async () => {
+    // Auto-create party if name typed but no ID
+    if (!docData.partyId && docData.partyName?.trim()) {
+      try {
+        const res = await arthaService.client.post('/parties', {
+          businessId,
+          name: docData.partyName,
+          partyType: newPartyType,
+        });
+        if (res.data.success) {
+          setField('partyId', res.data.data.id);
+        }
+      } catch (e) {
+        return Alert.alert('Error', 'Failed to create party: ' + (e.response?.data?.message || e.message));
+      }
+    }
+
     if (!docData.partyId) return Alert.alert('Required', 'Please select a client / party');
     if (docData.items.length === 0) return Alert.alert('Required', 'Add at least one item');
     if (!docData.invoiceNumber?.trim()) return Alert.alert('Required', `${typeLabel} number is required`);
+
+    const selDate = new Date(parseDateInput(dateInput));
+    if (lockDate && selDate <= lockDate) {
+      return Alert.alert('Locked', 'This date falls within a locked financial period.');
+    }
 
     setSaving(true);
     try {
@@ -218,16 +268,65 @@ const DocumentBuilderScreen = ({ type = 'INVOICE', initialData = null, onBack, o
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
 
         {/* ── Party ── */}
-        <TouchableOpacity style={[styles.card, { backgroundColor: theme.colors.surface }]} onPress={() => setPartyModal(true)}>
-          <User color={theme.colors.primary} size={20} />
-          <View style={{ flex: 1, marginLeft: 14 }}>
-            <Text style={styles.fieldLabel}>Billed To</Text>
-            <Text style={[styles.fieldValue, { color: docData.partyId ? theme.colors.text : theme.colors.textDim }]}>
-              {docData.partyName || 'Select Party'}
-            </Text>
+        <View style={[styles.card, { backgroundColor: theme.colors.surface, flexDirection: 'column', alignItems: 'stretch' }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <User color={theme.colors.primary} size={20} />
+            <View style={{ flex: 1, marginLeft: 14 }}>
+              <Text style={styles.fieldLabel}>Billed To</Text>
+              <TextInput
+                style={[styles.fieldValue, { color: theme.colors.text }]}
+                value={docData.partyName || ''}
+                placeholder="Type party name or select from list"
+                placeholderTextColor={theme.colors.textDim}
+                onChangeText={(v) => {
+                  setField('partyName', v);
+                  setField('partyId', '');
+                  if (v.trim()) setShowNewParty(true);
+                }}
+                onFocus={() => {
+                  if (docData.partyName) setShowNewParty(true);
+                }}
+              />
+            </View>
           </View>
-          <ChevronRight color={theme.colors.textDim} size={18} />
-        </TouchableOpacity>
+          {showNewParty ? (
+            <View style={{ flexDirection: 'row', marginTop: 12, gap: 8 }}>
+              <TouchableOpacity
+                style={[styles.addBtn, { flex: 1, backgroundColor: theme.colors.primary }]}
+                onPress={async () => {
+                  if (!docData.partyName?.trim()) return;
+                  setSaving(true);
+                  try {
+                    const res = await arthaService.client.post('/parties', {
+                      businessId,
+                      name: docData.partyName,
+                      partyType: newPartyType,
+                    });
+                    if (res.data.success) {
+                      setField('partyId', res.data.data.id);
+                      setField('partyName', res.data.data.name);
+                      setShowNewParty(false);
+                    }
+                  } catch (e) { console.error('Create party:', e); }
+                  finally { setSaving(false); }
+                }}
+                disabled={saving}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700' }}>{saving ? 'Adding...' : 'Add New Party'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.addBtn, { flex: 1, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.primary }]}
+                onPress={() => setPartyModal(true)}
+              >
+                <Text style={{ color: theme.colors.primary, fontWeight: '700' }}>Select Existing</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity style={{ marginTop: 8 }} onPress={() => setPartyModal(true)}>
+              <Text style={{ color: theme.colors.primary, fontWeight: '600', fontSize: 13 }}>Select from existing parties</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* ── Doc Number ── */}
         <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
@@ -309,12 +408,91 @@ const DocumentBuilderScreen = ({ type = 'INVOICE', initialData = null, onBack, o
         </View>
 
         {/* ── Line Items ── */}
-        <View style={styles.sectionRow}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Line Items</Text>
-          <TouchableOpacity style={[styles.addBtn, { backgroundColor: theme.colors.primary + '15' }]} onPress={() => setItemModal(true)}>
-            <Plus color={theme.colors.primary} size={16} />
-            <Text style={{ color: theme.colors.primary, fontWeight: '700', marginLeft: 4, fontSize: 13 }}>Add Item</Text>
-          </TouchableOpacity>
+        <View style={[styles.card, { backgroundColor: theme.colors.surface, padding: 12 }]}>
+          <View style={styles.sectionRow}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Line Items</Text>
+            {showNewItem ? (
+              <TouchableOpacity onPress={() => setShowNewItem(false)}>
+                <Text style={{ color: theme.colors.textDim, fontWeight: '600' }}>Cancel</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={[styles.addBtn, { backgroundColor: theme.colors.primary + '15' }]} onPress={() => setShowNewItem(true)}>
+                <Plus color={theme.colors.primary} size={16} />
+                <Text style={{ color: theme.colors.primary, fontWeight: '700', marginLeft: 4, fontSize: 13 }}>Add Item</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {showNewItem && (
+            <View style={{ marginBottom: 12, padding: 12, borderRadius: 12, backgroundColor: theme.colors.background }}>
+              <TextInput
+                style={[styles.fieldValue, { color: theme.colors.text, marginBottom: 8 }]}
+                placeholder="Item name *"
+                placeholderTextColor={theme.colors.textDim}
+                value={newItemData.name}
+                onChangeText={v => setNewItemData(p => ({ ...p, name: v }))}
+              />
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.miniLabel}>Rate (₹)</Text>
+                  <TextInput
+                    keyboardType="numeric"
+                    style={[styles.miniInput, { color: theme.colors.text }]}
+                    placeholder="0"
+                    placeholderTextColor={theme.colors.textDim}
+                    value={newItemData.rate}
+                    onChangeText={v => setNewItemData(p => ({ ...p, rate: v }))}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.miniLabel}>Tax %</Text>
+                  <TextInput
+                    keyboardType="numeric"
+                    style={[styles.miniInput, { color: theme.colors.text }]}
+                    placeholder="18"
+                    placeholderTextColor={theme.colors.textDim}
+                    value={String(newItemData.taxRate)}
+                    onChangeText={v => setNewItemData(p => ({ ...p, taxRate: v }))}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.miniLabel}>Unit</Text>
+                  <TextInput
+                    style={[styles.miniInput, { color: theme.colors.text }]}
+                    placeholder="NOS"
+                    placeholderTextColor={theme.colors.textDim}
+                    value={newItemData.unit}
+                    onChangeText={v => setNewItemData(p => ({ ...p, unit: v }))}
+                  />
+                </View>
+              </View>
+              <TouchableOpacity
+                style={[styles.addBtn, { backgroundColor: theme.colors.primary, marginTop: 12 }]}
+                onPress={async () => {
+                  if (!newItemData.name.trim()) return Alert.alert('Required', 'Item name is required');
+                  setSaving(true);
+                  try {
+                    const res = await arthaService.client.post('/items', {
+                      businessId,
+                      name: newItemData.name,
+                      sellingPrice: parseFloat(newItemData.rate) || 0,
+                      taxRate: parseFloat(newItemData.taxRate) || 18,
+                      unit: newItemData.unit || 'NOS',
+                    });
+                    if (res.data.success) {
+                      addItem({ ...res.data.data, sellingPrice: res.data.data.sellingPrice });
+                      setNewItemData({ name: '', rate: '', taxRate: 18, unit: 'NOS' });
+                      setShowNewItem(false);
+                    }
+                  } catch (e) { console.error('Create item:', e); }
+                  finally { setSaving(false); }
+                }}
+                disabled={saving}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700' }}>{saving ? 'Adding...' : 'Add to Document'}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {docData.items.length === 0 && (

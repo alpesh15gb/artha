@@ -170,6 +170,7 @@ router.get("/business/:businessId/party-ledger", async (req, res, next) => {
           t.narration ||
           t.reference ||
           (t.type === "RECEIPT" ? "Payment Received" : "Payment Made"),
+        reference: t.reference,
         debit: t.type === "PAYMENT" ? t.amount : 0,
         credit: t.type === "RECEIPT" || t.type === "JOURNAL" ? t.amount : 0,
         originalRecord: t,
@@ -179,6 +180,7 @@ router.get("/business/:businessId/party-ledger", async (req, res, next) => {
         date: new Date(inv.date),
         type: "INVOICE",
         description: `Invoice ${inv.invoiceNumber}`,
+        reference: inv.invoiceNumber,
         debit: inv.totalAmount,
         credit: 0,
         originalRecord: inv,
@@ -188,6 +190,7 @@ router.get("/business/:businessId/party-ledger", async (req, res, next) => {
         date: new Date(pur.date),
         type: "PURCHASE",
         description: `Purchase ${pur.purchaseNumber}`,
+        reference: pur.purchaseNumber,
         debit: 0,
         credit: pur.totalAmount,
         originalRecord: pur,
@@ -280,10 +283,10 @@ router.get("/business/:businessId/gst-summary", async (req, res, next) => {
       (acc, inv) => ({
         totalSales: acc.totalSales + inv.subtotal,
         totalTaxableSales: acc.totalTaxableSales + inv.subtotal,
-        cgstCollected: acc.cgstCollected + inv.cgstAmount,
-        sgstCollected: acc.sgstCollected + inv.sgstAmount,
-        igstCollected: acc.igstCollected + inv.igstAmount,
-        cessCollected: acc.cessCollected + inv.cessAmount,
+        cgstCollected: acc.cgstCollected + (inv.cgstAmount || inv.items?.reduce((s, i) => s + (i.cgstAmount || 0), 0) || 0),
+        sgstCollected: acc.sgstCollected + (inv.sgstAmount || inv.items?.reduce((s, i) => s + (i.sgstAmount || 0), 0) || 0),
+        igstCollected: acc.igstCollected + (inv.igstAmount || inv.items?.reduce((s, i) => s + (i.igstAmount || 0), 0) || 0),
+        cessCollected: acc.cessCollected + (inv.cessAmount || inv.items?.reduce((s, i) => s + (i.cessAmount || 0), 0) || 0),
         invoiceCount: acc.invoiceCount + 1,
         totalTax:
           acc.totalTax +
@@ -308,10 +311,10 @@ router.get("/business/:businessId/gst-summary", async (req, res, next) => {
       (acc, pur) => ({
         totalPurchases: acc.totalPurchases + pur.subtotal,
         totalTaxablePurchases: acc.totalTaxablePurchases + pur.subtotal,
-        cgstPaid: acc.cgstPaid + pur.cgstAmount,
-        sgstPaid: acc.sgstPaid + pur.sgstAmount,
-        igstPaid: acc.igstPaid + pur.igstAmount,
-        cessPaid: acc.cessPaid + pur.cessAmount,
+        cgstPaid: acc.cgstPaid + (pur.cgstAmount || pur.items?.reduce((s, i) => s + (i.cgstAmount || 0), 0) || 0),
+        sgstPaid: acc.sgstPaid + (pur.sgstAmount || pur.items?.reduce((s, i) => s + (i.sgstAmount || 0), 0) || 0),
+        igstPaid: acc.igstPaid + (pur.igstAmount || pur.items?.reduce((s, i) => s + (i.igstAmount || 0), 0) || 0),
+        cessPaid: acc.cessPaid + (pur.cessAmount || pur.items?.reduce((s, i) => s + (i.cessAmount || 0), 0) || 0),
         purchaseCount: acc.purchaseCount + 1,
         totalTax:
           acc.totalTax +
@@ -417,6 +420,8 @@ router.get("/business/:businessId/gst-summary", async (req, res, next) => {
           sgst: salesSummary.sgstCollected - purchaseSummary.sgstPaid,
           igst: salesSummary.igstCollected - purchaseSummary.igstPaid,
           cess: salesSummary.cessCollected - purchaseSummary.cessPaid,
+          total: (salesSummary.cgstCollected + salesSummary.sgstCollected + salesSummary.igstCollected + salesSummary.cessCollected) - 
+                 (purchaseSummary.cgstPaid + purchaseSummary.sgstPaid + purchaseSummary.igstPaid + purchaseSummary.cessPaid)
         },
       },
     });
@@ -1297,10 +1302,10 @@ router.get("/business/:businessId/stock-summary", async (req, res, next) => {
       name: item.name,
       sku: item.sku,
       hsnCode: item.hsnCode,
-      currentStock: item.stockQuantity || 0,
+      currentStock: item.currentStock || 0,
       valuationPrice: item.purchasePrice || item.sellingPrice || 0,
-      totalValuation: (item.stockQuantity || 0) * (item.purchasePrice || 0),
-      minStockLevel: item.minStockLevel || 0
+      totalValuation: (item.currentStock || 0) * (item.purchasePrice || 0),
+      reorderLevel: item.reorderLevel || 0
     }));
 
     const totalValuation = summary.reduce((sum, i) => sum + i.totalValuation, 0);

@@ -35,6 +35,7 @@ function PurchaseBuilder() {
     date: format(new Date(), 'yyyy-MM-dd'),
     dueDate: '',
     partyId: '',
+    partyName: '',
     notes: '',
     terms: '',
     status: 'RECEIVED',
@@ -119,9 +120,9 @@ function PurchaseBuilder() {
       return {
         subtotal: acc.subtotal + taxable,
         tax: acc.tax + tax,
-        total: acc.total + total
+        totalAmount: acc.totalAmount + total
       };
-    }, { subtotal: 0, tax: 0, total: 0 });
+    }, { subtotal: 0, tax: 0, totalAmount: 0 });
   }, [items, formData.isTaxInclusive]);
 
   // ── API ────────────────────────────────────
@@ -140,9 +141,9 @@ function PurchaseBuilder() {
     mutation.mutate({
        ...formData,
        status,
-       subtotal: totals.subtotal,
-       totalAmount: totals.total,
-       balanceDue: totals.total,
+subtotal: totals.subtotal,
+        totalAmount: totals.totalAmount,
+        balanceDue: totals.totalAmount,
        items: items.map(i => {
           const taxableAmount = (i.quantity || 0) * (i.rate || 0) * (1 - (i.discountPercent || 0) / 100);
           const hTax = i.taxRate / 2;
@@ -220,23 +221,55 @@ function PurchaseBuilder() {
                    <h2 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
                      <User className="w-3 h-3 text-indigo-500" /> Origin Supplier
                    </h2>
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Select Vendor Account</label>
-                        <select
-                          className="input-base !bg-slate-50"
-                          value={formData.partyId}
-                          onChange={(e) => setFormData({ ...formData, partyId: e.target.value })}
-                        >
-                          <option value="">Search suppliers...</option>
-                          {partiesData?.data?.filter(p => p.partyType !== 'CUSTOMER')?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                        </select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Supplier GSTIN</label>
-                        <input readOnly disabled className="input-base !bg-slate-100/50 uppercase font-black" value={selectedParty?.gstin || 'UNREGISTERED'} />
-                      </div>
-                   </div>
+<div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                       <div className="space-y-1.5">
+                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Vendor</label>
+                         <div className="relative">
+                           <select
+                             className="input-base !bg-slate-50"
+                             value={formData.partyId || ''}
+                             onChange={(e) => {
+                               const found = partiesData?.data?.find(p => p.id === e.target.value);
+                               if (found) {
+                                 setFormData({ ...formData, partyId: found.id, partyName: found.name });
+                               }
+                             }}
+                           >
+                            <option value="">Select vendor...</option>
+                            {partiesData?.data?.map(p => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                           </select>
+                         </div>
+                         {!formData.partyId && (
+                           <button
+                             type="button"
+onClick={async () => {
+                                const name = prompt('Enter new vendor name:');
+                                if (!name?.trim()) return;
+                                try {
+                                  const res = await api.post('/parties', {
+                                    businessId: currentBusiness.id,
+                                    name: name.trim(),
+                                    partyType: 'SUPPLIER',
+                                  });
+                                  if (res.data.success) {
+                                    setFormData({ ...formData, partyId: res.data.data.id, partyName: res.data.data.name });
+                                    toast.success('Vendor created!');
+                                  }
+                                } catch (err) { toast.error('Failed to create vendor'); }
+                              }}
+                             className="btn-primary !py-1.5 !text-xs"
+                           >
+                             + Add New Vendor
+                           </button>
+                         )}
+                       </div>
+                       <div className="space-y-1.5">
+                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Supplier GSTIN</label>
+                         <input readOnly disabled className="input-base !bg-slate-100/50 uppercase font-black" value={selectedParty?.gstin || 'UNREGISTERED'} />
+                       </div>
+                    </div>
                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100/50 flex items-center gap-4">
                       <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
                         <Building2 className="w-5 h-5" />
@@ -309,11 +342,29 @@ function PurchaseBuilder() {
                         <td className="text-center text-xs font-bold text-slate-300">{idx+1}</td>
                         <td className="py-4">
                            <div className="space-y-2">
-                              <select className="input-base !text-sm font-black" value={it.itemId} onChange={e => updateItem(it.id, 'itemId', e.target.value)}>
-                                <option value="">Select Resource Type...</option>
-                                {itemsData?.data?.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                              <select
+                                className="input-base !text-sm font-black"
+                                value={it.itemId || ''}
+                                onChange={(e) => {
+                                  const found = itemsData?.data?.find(p => p.id === e.target.value);
+                                  if (found) {
+                                    setItems(items.map(i => i.id === it.id ? {
+                                      ...i,
+                                      itemId: found.id,
+                                      description: found.name,
+                                      rate: found.purchasePrice || 0,
+                                      taxRate: found.taxRate || 18,
+                                      unit: found.unit || i.unit,
+                                    } : i));
+                                  }
+                                }}
+                              >
+                                <option value="">Select item...</option>
+                                {itemsData?.data?.map(p => (
+                                  <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
                               </select>
-                              <input className="w-full bg-transparent text-[11px] font-bold text-slate-400 px-1 border-none outline-none" placeholder="Add specific description or batch details..." value={it.description} onChange={e => updateItem(it.id, 'description', e.target.value)} />
+                              <input className="w-full bg-transparent text-[11px] font-bold text-slate-400 px-1 border-none outline-none" placeholder="Add specific description..." value={it.description} onChange={e => updateItem(it.id, 'description', e.target.value)} />
                            </div>
                         </td>
                         <td>
@@ -361,18 +412,18 @@ function PurchaseBuilder() {
                    <div className="relative z-10 space-y-5">
                       <div className="flex justify-between items-center text-slate-400">
                         <span className="text-[10px] font-black uppercase tracking-[0.2em]">Net Value Impact</span>
-                        <span className="text-lg font-bold text-white">₹{totals.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        <span className="text-lg font-bold text-white">₹{(totals?.subtotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                       </div>
                       <div className="flex justify-between items-center text-slate-400 text-emerald-400">
                         <span className="text-[10px] font-black uppercase tracking-[0.2em]">IGST/CGST Credit</span>
-                        <span className="text-lg font-bold">+ ₹{totals.tax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        <span className="text-lg font-bold">+ ₹{(totals?.tax || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                       </div>
                       <div className="h-px bg-white/10 my-2" />
                       <div>
                         <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-1">Total Payable Balance</p>
-                        <h2 className="text-5xl font-black tracking-tighter">₹{totals.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</h2>
+                        <h2 className="text-5xl font-black tracking-tighter">₹{(totals?.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</h2>
                       </div>
-                      <p className="text-[10px] font-bold text-slate-500 italic mt-3 uppercase">RUPEES {numberToWords(Math.round(totals.total))} ONLY</p>
+                      <p className="text-[10px] font-bold text-slate-500 italic mt-3 uppercase">RUPEES {numberToWords(Math.round(totals.totalAmount))} ONLY</p>
                    </div>
                 </section>
             </div>

@@ -8,6 +8,24 @@ import multer from 'multer';
 
 const router = Router();
 
+router.get('/defaults/items', async (req, res, next) => {
+  try {
+    const items = await prisma.defaultItem.findMany({ orderBy: { name: 'asc' } });
+    res.json({ success: true, data: items });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/defaults/parties', async (req, res, next) => {
+  try {
+    const parties = await prisma.defaultParty.findMany({ orderBy: { name: 'asc' } });
+    res.json({ success: true, data: parties });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.use(authenticate);
 
 const createBusinessSchema = z.object({
@@ -91,6 +109,45 @@ router.post('/', async (req, res, next) => {
         },
         include: { settings: true, cashAccounts: true, bankAccounts: true },
       });
+
+      const defaultItems = await tx.defaultItem.findMany();
+      if (defaultItems.length > 0) {
+        await tx.item.createMany({
+          data: defaultItems.map(item => ({
+            businessId: business.id,
+            name: item.name,
+            sku: item.sku,
+            hsnCode: item.hsnCode,
+            description: item.description,
+            category: item.category,
+            unit: item.unit,
+            taxRate: item.taxRate,
+            sellingPrice: item.sellingPrice,
+            purchasePrice: item.purchasePrice,
+            isService: item.isService,
+          })),
+        });
+      }
+
+      const defaultParties = await tx.defaultParty.findMany();
+      if (defaultParties.length > 0) {
+        await tx.party.createMany({
+          data: defaultParties.map(party => ({
+            businessId: business.id,
+            name: party.name,
+            partyType: party.partyType,
+            gstin: party.gstin,
+            pan: party.pan,
+            email: party.email,
+            phone: party.phone,
+            address: party.address,
+            city: party.city,
+            state: party.state,
+            isRegistered: party.isRegistered,
+          })),
+        });
+      }
+
       return business;
     });
 
@@ -278,6 +335,112 @@ router.post('/:id/signature', async (req, res, next) => {
     });
 
     res.json({ success: true, data: { signatureImage: signatureUrl } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const defaultItemSchema = z.object({
+  name: z.string().min(1),
+  sku: z.string().optional(),
+  hsnCode: z.string().optional(),
+  description: z.string().optional(),
+  category: z.string().optional(),
+  unit: z.string().default("NOS"),
+  taxRate: z.number().default(18),
+  sellingPrice: z.number().default(0),
+  purchasePrice: z.number().default(0),
+  isService: z.boolean().default(false),
+});
+
+const defaultPartySchema = z.object({
+  name: z.string().min(1),
+  partyType: z.enum(["CUSTOMER", "SUPPLIER", "BOTH"]).default("CUSTOMER"),
+  gstin: z.string().optional(),
+  pan: z.string().optional(),
+  email: z.string().email().optional(),
+  phone: z.string().optional(),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  isRegistered: z.boolean().default(false),
+});
+
+router.post('/defaults/items', authenticate, async (req, res, next) => {
+  try {
+    if (req.user.role !== 'ADMIN') {
+      return res.status(403).json({ success: false, message: 'Admin only' });
+    }
+    const data = defaultItemSchema.parse(req.body);
+    const item = await prisma.defaultItem.create({ data });
+    res.status(201).json({ success: true, data: item });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put('/defaults/items/:id', authenticate, async (req, res, next) => {
+  try {
+    if (req.user.role !== 'ADMIN') {
+      return res.status(403).json({ success: false, message: 'Admin only' });
+    }
+    const { id } = req.params;
+    const data = defaultItemSchema.partial().parse(req.body);
+    const item = await prisma.defaultItem.update({ where: { id }, data });
+    res.json({ success: true, data: item });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete('/defaults/items/:id', authenticate, async (req, res, next) => {
+  try {
+    if (req.user.role !== 'ADMIN') {
+      return res.status(403).json({ success: false, message: 'Admin only' });
+    }
+    const { id } = req.params;
+    await prisma.defaultItem.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/defaults/parties', authenticate, async (req, res, next) => {
+  try {
+    if (req.user.role !== 'ADMIN') {
+      return res.status(403).json({ success: false, message: 'Admin only' });
+    }
+    const data = defaultPartySchema.parse(req.body);
+    const party = await prisma.defaultParty.create({ data });
+    res.status(201).json({ success: true, data: party });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put('/defaults/parties/:id', authenticate, async (req, res, next) => {
+  try {
+    if (req.user.role !== 'ADMIN') {
+      return res.status(403).json({ success: false, message: 'Admin only' });
+    }
+    const { id } = req.params;
+    const data = defaultPartySchema.partial().parse(req.body);
+    const party = await prisma.defaultParty.update({ where: { id }, data });
+    res.json({ success: true, data: party });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete('/defaults/parties/:id', authenticate, async (req, res, next) => {
+  try {
+    if (req.user.role !== 'ADMIN') {
+      return res.status(403).json({ success: false, message: 'Admin only' });
+    }
+    const { id } = req.params;
+    await prisma.defaultParty.delete({ where: { id } });
+    res.json({ success: true });
   } catch (error) {
     next(error);
   }

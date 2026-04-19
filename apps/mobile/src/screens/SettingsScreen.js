@@ -96,6 +96,14 @@ const SettingsScreen = ({ onBack, onLogout, onNavigate }) => {
                   onPress={() => onNavigate('business_profile')}
                 />
                 <View style={styles.divider} />
+                <SettingItem 
+                  icon={Lock} 
+                  title="Fiscal Year & Locking" 
+                  subtitle="Manage periods & locks" 
+                  color="#6366f1" 
+                  onPress={() => onNavigate('fiscal_year')}
+                />
+                <View style={styles.divider} />
                 <SettingItem icon={Globe} title="Regional Settings" subtitle="Currency, Timezone" color="#f59e0b" />
               </View>
             </View>

@@ -23,6 +23,7 @@ const ExpenseBuilderScreen = ({ onBack, onSaveSuccess }) => {
   const [businessId, setBusinessId] = useState(null);
   const [categoryModal, setCategoryModal] = useState(false);
   const [methodModal, setMethodModal] = useState(false);
+  const [lockDate, setLockDate] = useState(null);
 
   // Form State — paymentMethod MUST be uppercase to match API enum
   const [expenseData, setExpenseData] = useState({
@@ -46,7 +47,13 @@ const ExpenseBuilderScreen = ({ onBack, onSaveSuccess }) => {
     try {
       const bizRes = await arthaService.client.get('/businesses');
       const bizId = bizRes.data.data?.[0]?.id;
-      if (bizId) setBusinessId(bizId);
+      if (bizId) {
+        setBusinessId(bizId);
+        const setRes = await arthaService.getSettings(bizId);
+        if (setRes.data?.enableFinancialLock) {
+          setLockDate(new Date(setRes.data.lockDate));
+        }
+      }
     } catch (error) {
       console.error('Business fetch failed:', error);
     } finally {
@@ -57,6 +64,11 @@ const ExpenseBuilderScreen = ({ onBack, onSaveSuccess }) => {
   const handleSave = async () => {
     const amt = parseFloat(expenseData.amount);
     if (!amt || amt <= 0) return Alert.alert('Error', 'Please enter a valid amount');
+
+    const selDate = new Date(expenseData.date);
+    if (lockDate && selDate <= lockDate) {
+      return Alert.alert('Locked', 'This date falls within a locked financial period.');
+    }
 
     setSaving(true);
     try {

@@ -80,6 +80,7 @@ const SETTINGS_SECTIONS = [
     label: "Workspace",
     items: [
       { id: "accounts", label: "General Ledger", icon: FileSpreadsheet },
+      { id: "fiscal-year", label: "Fiscal Year", icon: Clock },
       { id: "tax-rates", label: "Tax Protocols", icon: Zap },
       { id: "notifications", label: "Alert Center", icon: Bell },
       { id: "security", label: "Audit & Access", icon: Fingerprint },
@@ -101,6 +102,7 @@ function Settings() {
   const [editingTax, setEditingTax] = useState(null);
   const [editingAccount, setEditingAccount] = useState(null);
   const [isFetchingGst, setIsFetchingGst] = useState(false);
+  const [showClosingWizard, setShowClosingWizard] = useState(false);
 
   const businessId = currentBusiness?.id;
 
@@ -626,10 +628,10 @@ function Settings() {
                     </div>
                     <Toggle
                       checked={settings?.enableGst ?? true}
-                      onChange={(e) =>
+                      onChange={(val) =>
                         setSettings({
                           ...settings,
-                          enableGst: e.target.checked,
+                          enableGst: val,
                         })
                       }
                     />
@@ -1262,10 +1264,10 @@ function Settings() {
                         </span>
                         <Toggle
                           checked={settings?.[item.id] ?? item.default}
-                          onChange={(e) =>
+                          onChange={(val) =>
                             setSettings({
                               ...settings,
-                              [item.id]: e.target.checked,
+                              [item.id]: val,
                             })
                           }
                         />
@@ -1304,10 +1306,10 @@ function Settings() {
                       </div>
                       <Toggle
                         checked={settings?.twoFactorEnabled || false}
-                        onChange={(e) =>
+                        onChange={(val) =>
                           setSettings({
                             ...settings,
-                            twoFactorEnabled: e.target.checked,
+                            twoFactorEnabled: val,
                           })
                         }
                       />
@@ -1324,10 +1326,10 @@ function Settings() {
                       </div>
                       <Toggle
                         checked={settings?.auditLogging ?? true}
-                        onChange={(e) =>
+                        onChange={(val) =>
                           setSettings({
                             ...settings,
-                            auditLogging: e.target.checked,
+                            auditLogging: val,
                           })
                         }
                       />
@@ -1426,11 +1428,28 @@ function Settings() {
                   </div>
 
                   <div className="flex items-center gap-4">
-                    <Button variant="secondary">
+                    <Button 
+                      variant="secondary"
+                      onClick={() => {
+                        window.open(`${import.meta.env.VITE_API_URL || ""}/api/settings/${businessId}/export?format=json`, '_blank');
+                      }}
+                    >
                       <Download className="w-4 h-4 mr-2" />
                       Export All Data
                     </Button>
-                    <Button variant="secondary">
+                    <Button 
+                      variant="secondary"
+                      onClick={async () => {
+                        toast.promise(
+                          api.post(`/settings/${businessId}/backup`),
+                          {
+                            loading: 'Archiving Workspace...',
+                            success: 'Vault Synced Successfully',
+                            error: 'Archive Failed',
+                          }
+                        );
+                      }}
+                    >
                       <RefreshCw className="w-4 h-4 mr-2" />
                       Backup Now
                     </Button>
@@ -1440,6 +1459,161 @@ function Settings() {
                     <Button onClick={() => handleSave()}>
                       <Save className="w-4 h-4 mr-2" />
                       Save Data Settings
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Section: Fiscal Year & Locking ─────────────────── */}
+              {activeTab === "fiscal-year" && (
+                <div className="space-y-10">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-xl font-black text-slate-900 leading-none">
+                        Fiscal Year & Locking
+                      </h2>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">
+                        Manage financial periods and lock transactions for closed years
+                      </p>
+                    </div>
+                    <Badge variant={settings?.enableFinancialLock ? "danger" : "default"}>
+                      {settings?.enableFinancialLock ? "BOOKS LOCKED" : "BOOKS OPEN"}
+                    </Badge>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 ring-1 ring-slate-100 p-8 rounded-[2.5rem] bg-slate-50/50">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                        Fiscal Year Start
+                      </label>
+                      <select
+                        className="input-base font-bold"
+                        value={settings?.financialYearStart || "04-01"}
+                        onChange={(e) => setSettings({ ...settings, financialYearStart: e.target.value })}
+                      >
+                        <option value="04-01">April 1st (Standard India)</option>
+                        <option value="01-01">January 1st (Calendar Year)</option>
+                        <option value="07-01">July 1st</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                        Transaction Lock Status
+                      </label>
+                      <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100">
+                        <span className="text-xs font-bold text-slate-600">Enable Closing Lock</span>
+                        <Toggle 
+                          checked={settings?.enableFinancialLock || false} 
+                          onChange={(val) => setSettings({ ...settings, enableFinancialLock: val })} 
+                        />
+                      </div>
+                    </div>
+
+                    {settings?.enableFinancialLock && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="md:col-span-2 space-y-4 p-6 bg-rose-50 rounded-3xl border border-rose-100"
+                      >
+                        <div className="flex items-center gap-3 mb-2">
+                          <ShieldCheck className="w-5 h-5 text-rose-600" />
+                          <h4 className="text-sm font-black text-rose-900 uppercase tracking-tight">Security Lock Protocol</h4>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-rose-400 uppercase tracking-widest">
+                              Lock All Transactions On/Before
+                            </label>
+                            <input
+                              type="date"
+                              className="input-base border-rose-200 focus:ring-rose-500"
+                              value={settings?.lockDate ? new Date(settings.lockDate).toISOString().split('T')[0] : ''}
+                              onChange={(e) => setSettings({ ...settings, lockDate: e.target.value })}
+                            />
+                          </div>
+                          <div className="flex items-end">
+                            <p className="text-[10px] font-medium text-rose-600 leading-relaxed italic">
+                              * Once locked, no transactions (Invoices, Expenses, Payments) can be created, edited, or deleted before this date. Only authorized personnel can unlock.
+                            </p>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </div>
+
+                  <Card className="bg-indigo-900 text-white border-none p-8 rounded-[2.5rem] overflow-hidden relative">
+                    <Calculator className="absolute -right-8 -bottom-8 w-40 h-40 text-white/5 -rotate-12" />
+                    <div className="relative z-10 space-y-4">
+                      <h3 className="text-lg font-black uppercase tracking-tight">Perform Year-End Closing</h3>
+                      <p className="text-xs font-medium text-indigo-100 max-w-xl opacity-80 leading-relaxed">
+                        Ready to finalize your books for the current financial year? This will calculate your Retained Earnings and roll over balances to the next period.
+                      </p>
+                      <div className="pt-4 flex gap-4">
+                        <Button 
+                          className="bg-white text-indigo-900 hover:bg-slate-100 !rounded-xl !font-black !text-[10px] uppercase tracking-widest !px-6"
+                          onClick={() => setShowClosingWizard(true)}
+                        >
+                          Run Closing Wizard
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => setActiveTab('accounts')}
+                          className="text-white hover:bg-white/10 !rounded-xl !font-black !text-[10px] uppercase tracking-widest"
+                        >
+                          Review Balances
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+
+                  <Modal
+                    isOpen={showClosingWizard}
+                    onClose={() => setShowClosingWizard(false)}
+                    title="Fiscal Year Closing Wizard"
+                  >
+                    <div className="space-y-6">
+                      <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 italic font-bold text-slate-600 text-sm">
+                        This process will finalize the financial records for the current year, calculate Net Profit/Loss, and enable the Transaction Lock automatically.
+                      </div>
+                      
+                      <div className="space-y-4">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1"> Closing Date </label>
+                          <input 
+                            type="date" 
+                            className="input-base" 
+                            defaultValue="2024-03-31" 
+                            id="closing-date-input"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end gap-3 pt-4">
+                        <Button variant="secondary" onClick={() => setShowClosingWizard(false)}>Cancel</Button>
+                        <Button onClick={async () => {
+                          const endDate = document.getElementById('closing-date-input').value;
+                          toast.promise(
+                            api.post(`/settings/${businessId}/close-year`, { endDate }),
+                            {
+                              loading: 'Processing Closing Protocol...',
+                              success: (res) => {
+                                setShowClosingWizard(false);
+                                loadSettings();
+                                return `Year Closed. Profit: Rs.${res.data.data.netProfit.toLocaleString()}`;
+                               },
+                               error: 'Closing Failed',
+                             }
+                           );
+                         }}>Finalize Closing</Button>
+                      </div>
+                    </div>
+                  </Modal>
+
+                  <div className="flex justify-end pt-6 border-t border-slate-100">
+                    <Button onClick={() => handleSave()} className="!px-10">
+                      <Save className="w-4 h-4 mr-2" />
+                      Save Fiscal Protocol
                     </Button>
                   </div>
                 </div>

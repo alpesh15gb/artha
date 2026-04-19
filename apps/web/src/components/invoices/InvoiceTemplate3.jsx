@@ -85,10 +85,10 @@ export function InvoiceTemplate3({ invoice, business, party, items, totals = {} 
                  {item.hsnCode && <p className="text-[10px] opacity-70 italic">{item.hsnCode}</p>}
               </td>
               <td className="border-r-2 border-black pt-1">{item.hsnCode || '-'}</td>
-              <td className="border-r-2 border-black pt-1 font-black underline">{item.quantity} pcs</td>
+              <td className="border-r-2 border-black pt-1 font-black underline">{item?.quantity || 0} pcs</td>
               <td className="border-r-2 border-black pt-1">{item.unit || 'pcs'}</td>
-              <td className="border-r-2 border-black pt-1 text-right px-1">{(item.rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-              <td className="pt-1 text-right px-1 font-black">{((item.quantity || 0) * (item.rate || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+              <td className="border-r-2 border-black pt-1 text-right px-1">{(item?.rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+              <td className="pt-1 text-right px-1 font-black">{((item?.quantity || 0) * (item?.rate || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
             </tr>
           ))}
           {/* Empty Space */}
@@ -170,7 +170,7 @@ export function InvoiceTemplate3({ invoice, business, party, items, totals = {} 
         </div>
         <div className="col-span-4 p-2 bg-black text-white flex justify-between items-center px-4">
            <span className="uppercase text-[9px] font-black opacity-60">Invoice Total</span>
-           <span className="text-xl font-black">₹ {(totals?.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+           <span className="text-xl font-black">₹ {(totals?.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
         </div>
       </div>
 
@@ -178,8 +178,8 @@ export function InvoiceTemplate3({ invoice, business, party, items, totals = {} 
       <div className="grid grid-cols-2 divide-x-2 divide-black border-b-2 border-black">
         <div className="p-2 space-y-1 font-black uppercase text-[10px]">
            <h4 className="underline mb-2 opacity-40">Party's Outstanding Balance :</h4>
-           <div className="flex justify-between"><span>Previous Balance</span><span>: ₹ {outstandingBalance.previous.toLocaleString('en-IN', { minimumFractionDigits: 2 })} Dr</span></div>
-           <div className="flex justify-between"><span>Bill Amount</span><span>: ₹ {(totals?.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} Dr</span></div>
+           <div className="flex justify-between"><span>Previous Balance</span><span>: ₹ {(outstandingBalance?.previous || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} Dr</span></div>
+           <div className="flex justify-between"><span>Bill Amount</span><span>: ₹ {(totals?.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} Dr</span></div>
            <div className="flex justify-between bg-black text-white px-2 py-0.5 mt-1 border border-black italic"><span>Total Balance Amount</span><span>: ₹ {(outstandingBalance.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} Dr</span></div>
         </div>
         <div className="p-2 space-y-1 font-black uppercase text-[10px]">

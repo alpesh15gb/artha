@@ -31,6 +31,7 @@ const InvoicesScreen = ({ onBack, onCreate }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [search, setSearch] = useState('');
+  const [lockDate, setLockDate] = useState(null);
   const [payModal, setPayModal] = useState(null);  // invoice being paid
   const [payAmount, setPayAmount] = useState('');
   const [payMethod, setPayMethod] = useState('Cash');
@@ -43,14 +44,28 @@ const InvoicesScreen = ({ onBack, onCreate }) => {
       const bizRes = await arthaService.client.get('/businesses');
       const bizId = bizRes.data.data?.[0]?.id;
       if (bizId) {
-        const res = await arthaService.getInvoices(bizId);
-        setInvoices(res.data || []);
+        const [invRes, setRes] = await Promise.all([
+          arthaService.getInvoices(bizId),
+          arthaService.getSettings(bizId)
+        ]);
+        setInvoices(invRes.data || []);
+        if (setRes.data?.enableFinancialLock) {
+          setLockDate(new Date(setRes.data.lockDate));
+        } else {
+          setLockDate(null);
+        }
       }
     } catch (e) { console.error('Fetch invoices:', e); }
     finally { setLoading(false); setRefreshing(false); }
   };
 
+  const isLocked = (date) => {
+    if (!lockDate) return false;
+    return new Date(date) <= lockDate;
+  };
+
   const deleteInvoice = async (invoice) => {
+    if (isLocked(invoice.date)) return Alert.alert('Locked', 'This transaction is in a locked period.');
     Alert.alert('Delete Invoice', `Are you sure you want to delete ${invoice.invoiceNumber}?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
@@ -105,6 +120,16 @@ const InvoicesScreen = ({ onBack, onCreate }) => {
 
   const showActions = (item) => {
     const cfg = statusCfg(item.status);
+    const locked = isLocked(item.date);
+
+    if (locked) {
+      return Alert.alert(`${item.invoiceNumber}  •  LOCKED`, 'This transaction is in a finalized period and cannot be modified.', [
+        { text: 'Download PDF', onPress: () => downloadInvoice(item) },
+        { text: 'Share', onPress: () => shareInvoice(item) },
+        { text: 'OK', style: 'cancel' },
+      ]);
+    }
+
     const actions = ['Edit', 'Download PDF', 'Share', 'Record Payment'];
     if (item.status !== 'PAID' && item.status !== 'Paid') actions.push('Mark as Paid');
     if (item.status === 'DRAFT' || item.status === 'Draft') actions.push('Mark as Sent');
@@ -140,19 +165,27 @@ const InvoicesScreen = ({ onBack, onCreate }) => {
 
   const renderItem = ({ item }) => {
     const cfg = statusCfg(item.status);
+    const locked = isLocked(item.date);
     return (
       <TouchableOpacity
         style={[styles.card, { backgroundColor: theme.colors.surface }]}
         onPress={() => showActions(item)}
-        onLongPress={() => setSelectedInvoice(item)}
+        onLongPress={() => !locked && setSelectedInvoice(item)}
       >
         <View style={styles.cardTop}>
           <View style={styles.numRow}>
             <FileText color={theme.colors.primary} size={15} />
             <Text style={[styles.invNum, { color: theme.colors.textDim }]}>{item.invoiceNumber}</Text>
           </View>
-          <View style={[styles.badge, { backgroundColor: cfg.color + '20' }]}>
-            <Text style={[styles.badgeTxt, { color: cfg.color }]}>{cfg.label}</Text>
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            {locked && (
+              <View style={[styles.badge, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
+                <Text style={[styles.badgeTxt, { color: '#ef4444' }]}>LOCKED</Text>
+              </View>
+            )}
+            <View style={[styles.badge, { backgroundColor: cfg.color + '20' }]}>
+              <Text style={[styles.badgeTxt, { color: cfg.color }]}>{cfg.label}</Text>
+            </View>
           </View>
         </View>
         <View style={styles.cardBody}>
@@ -176,27 +209,29 @@ const InvoicesScreen = ({ onBack, onCreate }) => {
           </View>
         </View>
         {/* Quick action strip */}
-        <View style={styles.actions}>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => setSelectedInvoice(item)}>
-            <Edit3 color={theme.colors.primary} size={14} />
-            <Text style={[styles.actionTxt, { color: theme.colors.primary }]}>Edit</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => downloadInvoice(item)}>
-            <Download color={theme.colors.textDim} size={14} />
-            <Text style={[styles.actionTxt, { color: theme.colors.textDim }]}>PDF</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => shareInvoice(item)}>
-            <Share2 color={theme.colors.textDim} size={14} />
-            <Text style={[styles.actionTxt, { color: theme.colors.textDim }]}>Share</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => { setPayModal(item); setPayAmount(String(item.balanceDue || item.totalAmount || '')); }}
-          >
-            <DollarSign color='#10b981' size={14} />
-            <Text style={[styles.actionTxt, { color: '#10b981' }]}>Pay</Text>
-          </TouchableOpacity>
-        </View>
+        {!locked && (
+          <View style={styles.actions}>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => setSelectedInvoice(item)}>
+              <Edit3 color={theme.colors.primary} size={14} />
+              <Text style={[styles.actionTxt, { color: theme.colors.primary }]}>Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => downloadInvoice(item)}>
+              <Download color={theme.colors.textDim} size={14} />
+              <Text style={[styles.actionTxt, { color: theme.colors.textDim }]}>PDF</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => shareInvoice(item)}>
+              <Share2 color={theme.colors.textDim} size={14} />
+              <Text style={[styles.actionTxt, { color: theme.colors.textDim }]}>Share</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={() => { setPayModal(item); setPayAmount(String(item.balanceDue || item.totalAmount || '')); }}
+            >
+              <DollarSign color='#10b981' size={14} />
+              <Text style={[styles.actionTxt, { color: '#10b981' }]}>Pay</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </TouchableOpacity>
     );
   };

@@ -7,6 +7,7 @@ import {
   Plus, 
   CreditCard,
   ShoppingBag,
+  Lock,
   Tag,
   Calendar,
   Wallet
@@ -17,6 +18,7 @@ const ExpensesScreen = ({ onBack, onCreate }) => {
   const [loading, setLoading] = useState(true);
   const [expenses, setExpenses] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [lockDate, setLockDate] = useState(null);
 
   useEffect(() => {
     fetchExpenses();
@@ -27,8 +29,16 @@ const ExpensesScreen = ({ onBack, onCreate }) => {
       const bizRes = await arthaService.client.get('/businesses');
       const bizId = bizRes.data.data?.[0]?.id;
       if (bizId) {
-        const res = await arthaService.client.get(`/expenses/business/${bizId}`);
-        setExpenses(res.data.data || []);
+        const [expRes, setRes] = await Promise.all([
+          arthaService.getExpenses(bizId),
+          arthaService.getSettings(bizId)
+        ]);
+        setExpenses(expRes.data || []);
+        if (setRes.data?.enableFinancialLock) {
+          setLockDate(new Date(setRes.data.lockDate));
+        } else {
+          setLockDate(null);
+        }
       }
     } catch (error) {
       console.error('Expenses fetch failed:', error);
@@ -37,18 +47,32 @@ const ExpensesScreen = ({ onBack, onCreate }) => {
     }
   };
 
-  const renderItem = ({ item }) => (
-    <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-      <View style={styles.cardHeader}>
-        <View style={[styles.iconBox, { backgroundColor: theme.colors.error + '15' }]}>
-          <ShoppingBag color={theme.colors.error} size={20} />
+  const isLocked = (date) => {
+    if (!lockDate) return false;
+    return new Date(date) <= lockDate;
+  };
+
+  const renderItem = ({ item }) => {
+    const locked = isLocked(item.date);
+    return (
+      <View style={[styles.card, { backgroundColor: theme.colors.surface, opacity: locked ? 0.8 : 1 }]}>
+        <View style={styles.cardHeader}>
+          <View style={[styles.iconBox, { backgroundColor: locked ? 'rgba(0,0,0,0.05)' : theme.colors.error + '15' }]}>
+            {locked ? <Lock color={theme.colors.textDim} size={20} /> : <ShoppingBag color={theme.colors.error} size={20} />}
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={[styles.category, { color: theme.colors.text }]}>{item.category || 'General Expense'}</Text>
+              {locked && (
+                <View style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                   <Text style={{ color: '#ef4444', fontSize: 9, fontWeight: 'bold' }}>LOCKED</Text>
+                </View>
+              )}
+            </View>
+            <Text style={{ color: theme.colors.textDim, fontSize: 12 }}>{item.expenseNumber}</Text>
+          </View>
+          <Text style={[styles.amount, { color: theme.colors.text }]}>₹{item.totalAmount.toLocaleString()}</Text>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.category, { color: theme.colors.text }]}>{item.category || 'General Expense'}</Text>
-          <Text style={{ color: theme.colors.textDim, fontSize: 12 }}>{item.expenseNumber}</Text>
-        </View>
-        <Text style={[styles.amount, { color: theme.colors.text }]}>₹{item.totalAmount.toLocaleString()}</Text>
-      </View>
       
       <View style={styles.cardInfo}>
         <View style={styles.infoItem}>

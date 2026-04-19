@@ -144,10 +144,10 @@ export function InvoiceTemplate1({ invoice, business, party, items: rawItems = [
                 )}
               </td>
               <td className="border-r border-black text-center pt-1">{item.hsnCode || '-'}</td>
-              <td className="border-r border-black text-center pt-1 font-bold">{item.quantity} {item.unit || 'PCS'}</td>
+              <td className="border-r border-black text-center pt-1 font-bold">{item?.quantity || 0} {item?.unit || 'PCS'}</td>
               <td className="border-r border-black text-right px-1 pt-1">{(item.rate || 0).toFixed(2)}</td>
               <td className="border-r border-black text-center pt-1">{item.unit || 'PCS'}</td>
-              <td className="text-right px-1 pt-1 font-bold">{((item.quantity || 0) * (item.rate || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+              <td className="text-right px-1 pt-1 font-bold">{((item?.quantity || 0) * (item?.rate || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
             </tr>
           ))}
           {/* Fill empty spaces */}
@@ -196,8 +196,8 @@ export function InvoiceTemplate1({ invoice, business, party, items: rawItems = [
         </div>
         <div className="border-t border-black flex flex-col justify-between">
           <div className="divide-y divide-black border-b border-black">
-            <div className="flex justify-between px-1 py-0.5"><span>GST Total</span><span>{(totals?.cgst + totals?.sgst || totals?.tax || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
-            <div className="flex justify-between px-1 py-0.5 font-bold bg-gray-100 italic"><span>Net Payable</span><span className="text-lg text-[#001a33]">₹ {(totals?.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
+            <div className="flex justify-between px-1 py-0.5"><span>GST Total</span><span>{((totals?.cgst || 0) + (totals?.sgst || 0) || totals?.totalTax || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
+            <div className="flex justify-between px-1 py-0.5 font-bold bg-gray-100 italic"><span>Net Payable</span><span className="text-lg text-[#001a33]">₹ {(totals?.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
           </div>
           <div className="p-2 flex gap-4 items-center">
             <div className="text-[10px] w-full">

@@ -15,6 +15,7 @@ import EstimatesScreen from './src/screens/EstimatesScreen';
 import ExpensesScreen from './src/screens/ExpensesScreen';
 import PurchasesScreen from './src/screens/PurchasesScreen';
 import ItemDetailScreen from './src/screens/ItemDetailScreen';
+import FiscalYearScreen from './src/screens/FiscalYearScreen';
 import PurchaseBuilderScreen from './src/screens/PurchaseBuilderScreen';
 import DocumentBuilderScreen from './src/screens/DocumentBuilderScreen';
 import ExpenseBuilderScreen from './src/screens/ExpenseBuilderScreen';
@@ -153,6 +154,8 @@ export default function App() {
         return <BusinessProfileScreen onBack={() => setCurrentScreen('settings')} />;
       case 'personal_profile':
         return <UserProfileScreen onBack={() => setCurrentScreen('settings')} />;
+      case 'fiscal_year':
+        return <FiscalYearScreen onBack={() => setCurrentScreen('settings')} />;
       case 'dashboard':
       default:
         return <Dashboard onNavigate={(screen) => {

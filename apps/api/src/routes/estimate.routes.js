@@ -146,69 +146,88 @@ router.get("/business/:businessId", async (req, res, next) => {
 router.post("/", async (req, res, next) => {
   try {
     const data = createEstimateSchema.parse(req.body);
-    const { items } = data;
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Verify item IDs exist
+      const itemIds = data.items.map(i => i.itemId).filter(Boolean);
+      let validItems = [];
+      if (itemIds.length > 0) {
+        const dbItems = await tx.item.findMany({
+          where: { id: { in: itemIds }, businessId: data.businessId },
+          select: { id: true }
+        });
+        const validIds = new Set(dbItems.map(i => i.id));
+        validItems = data.items.map(item => ({
+          ...item,
+          itemId: item.itemId && validIds.has(item.itemId) ? item.itemId : null
+        }));
+      } else {
+        validItems = data.items;
+      }
 
-    const estimate = await prisma.estimate.create({
-      data: {
-        businessId: data.businessId,
-        estimateNumber: data.estimateNumber,
-        partyId: data.partyId || null,
-        partyName: data.partyName || null,
-        status: data.status || "DRAFT",
-        date: new Date(data.date || Date.now()),
-        expiryDate: data.expiryDate ? new Date(data.expiryDate) : null,
-        subtotal: data.subtotal,
-        discountAmount: data.discountAmount || 0,
-        discountPercent: data.discountPercent || 0,
-        taxAmount:
-          data.totalTax ||
-          data.cgstAmount + data.sgstAmount + data.igstAmount ||
-          0,
-        totalAmount: data.totalAmount,
-        notes: data.notes,
-        terms: data.terms,
-        amountInWords: data.amountInWords,
-        items: {
-          create: items.map((item) => ({
-            itemId: item.itemId || null,
-            description: item.description || item.name || "No description",
-            hsnCode: item.hsnCode || null,
-            quantity: item.quantity,
-            unit: item.unit || "NOS",
-            rate: item.rate,
-            discountPercent: item.discountPercent || 0,
-            discountAmount: item.discountAmount || 0,
-            taxableAmount: item.taxableAmount || 0,
-            cgstRate: item.cgstRate || 0,
-            cgstAmount: item.cgstAmount || 0,
-            sgstRate: item.sgstRate || 0,
-            sgstAmount: item.sgstAmount || 0,
-            igstRate: item.igstRate || 0,
-            igstAmount: item.igstAmount || 0,
-            cessRate: item.cessRate || 0,
-            cessAmount: item.cessAmount || 0,
-            totalAmount: item.totalAmount || 0,
-          })),
-        },
-      },
-      include: {
-        items: true,
-        party: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-            address: true,
-            city: true,
-            state: true,
-            pincode: true,
-            gstin: true,
+      const estimate = await tx.estimate.create({
+        data: {
+          businessId: data.businessId,
+          estimateNumber: data.estimateNumber,
+          partyId: data.partyId || null,
+          partyName: data.partyName || null,
+          status: data.status || "DRAFT",
+          date: new Date(data.date || Date.now()),
+          expiryDate: data.expiryDate ? new Date(data.expiryDate) : null,
+          subtotal: data.subtotal,
+          discountAmount: data.discountAmount || 0,
+          discountPercent: data.discountPercent || 0,
+          taxAmount:
+            data.totalTax ||
+            data.cgstAmount + data.sgstAmount + data.igstAmount ||
+            0,
+          totalAmount: data.totalAmount,
+          notes: data.notes,
+          terms: data.terms,
+          amountInWords: data.amountInWords,
+          items: {
+            create: validItems.map((item) => ({
+              itemId: item.itemId || null,
+              description: item.description || item.name || "No description",
+              hsnCode: item.hsnCode || null,
+              quantity: item.quantity,
+              unit: item.unit || "NOS",
+              rate: item.rate,
+              discountPercent: item.discountPercent || 0,
+              discountAmount: item.discountAmount || 0,
+              taxableAmount: item.taxableAmount || 0,
+              cgstRate: item.cgstRate || 0,
+              cgstAmount: item.cgstAmount || 0,
+              sgstRate: item.sgstRate || 0,
+              sgstAmount: item.sgstAmount || 0,
+              igstRate: item.igstRate || 0,
+              igstAmount: item.igstAmount || 0,
+              cessRate: item.cessRate || 0,
+              cessAmount: item.cessAmount || 0,
+              totalAmount: item.totalAmount || 0,
+            })),
           },
         },
-      },
+        include: {
+          items: true,
+          party: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              address: true,
+              city: true,
+              state: true,
+              pincode: true,
+              gstin: true,
+            },
+          },
+        },
+      });
+      return estimate;
     });
-    res.status(201).json({ success: true, data: estimate });
+
+    res.status(201).json({ success: true, data: result });
   } catch (error) {
     next(error);
   }

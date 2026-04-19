@@ -43,6 +43,7 @@ function InvoiceBuilder() {
     date: format(new Date(), 'yyyy-MM-dd'),
     dueDate: format(new Date(Date.now() + 15 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'),
     partyId: '',
+    partyName: '',
     poNumber: '',
     stateOfSupply: '',
     invoiceType: 'TAX_INVOICE',
@@ -231,28 +232,44 @@ function InvoiceBuilder() {
                   <User className="w-3 h-3 text-indigo-500" /> Customer Information
                 </h2>
                 <div className="flex gap-4">
-                   <select
-                    className="text-[10px] font-bold bg-slate-50 border-none outline-none text-indigo-600 uppercase tracking-wider"
-                    value={formData.invoiceType}
-                    onChange={(e) => setFormData({...formData, invoiceType: e.target.value})}
-                   >
-                     <option value="TAX_INVOICE">Tax Invoice</option>
-                     <option value="BILL_OF_SUPPLY">Bill of Supply</option>
-                   </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Select Customer</label>
                   <select
                     className="input-base !bg-slate-50"
-                    value={formData.partyId}
-                    onChange={(e) => setFormData({ ...formData, partyId: e.target.value })}
+                    value={formData.partyId || ''}
+                    onChange={(e) => {
+                      const found = partiesData?.data?.find(p => p.id === e.target.value);
+                      if (found) {
+                        setFormData({ ...formData, partyId: found.id, partyName: found.name });
+                      }
+                    }}
                   >
-                    <option value="">Search customer...</option>
-                    {partiesData?.data?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    <option value="">Select customer...</option>
+                    {partiesData?.data?.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
                   </select>
+                  {!formData.partyId && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const name = prompt('Enter new customer name:');
+                        if (!name?.trim()) return;
+                        try {
+                          const res = await api.post('/parties', {
+                            businessId: currentBusiness.id,
+                            name: name.trim(),
+                            partyType: 'CUSTOMER',
+                          });
+                          if (res.data.success) {
+                            setFormData({ ...formData, partyId: res.data.data.id, partyName: res.data.data.name });
+                            toast.success('Customer created!');
+                          }
+                        } catch (err) { toast.error('Failed to create customer'); }
+                      }}
+                      className="btn-primary !py-1.5 !text-xs"
+                    >
+                      + Add New
+                    </button>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">GST Number</label>
@@ -265,7 +282,7 @@ function InvoiceBuilder() {
                 <textarea
                   readOnly disabled
                   className="input-base !bg-slate-100/50 cursor-not-allowed min-h-[60px]"
-                  value={selectedParty?.address || 'Select a customer to see address details'}
+                  value={selectedParty?.address || (formData.partyName ? '(New customer)' : 'Select a customer to see address details')}
                 />
               </div>
             </section>
@@ -338,21 +355,59 @@ function InvoiceBuilder() {
                 {items.map((it, idx) => (
                   <tr key={it.id} className="hover:bg-indigo-50/20 transition-colors group">
                     <td className="text-center text-xs font-bold text-slate-300">{idx + 1}</td>
-                    <td>
+<td>
                       <div className="space-y-1.5 p-1">
                         <select
                           className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-sm font-bold text-slate-900 focus:border-indigo-400 outline-none"
                           value={it.itemId || ''}
-                          onChange={(e) => updateItem(it.id, 'itemId', e.target.value)}
+                          onChange={(e) => {
+                            const found = productsData?.data?.find(p => p.id === e.target.value);
+                            if (found) {
+                              setItems(items.map(i => i.id === it.id ? {
+                                ...i,
+                                itemId: found.id,
+                                description: found.name,
+                                rate: found.sellingPrice || 0,
+                                taxRate: found.taxRate || 18,
+                                unit: found.unit || i.unit,
+                              } : i));
+                            }
+                          }}
                         >
-                          <option value="">SKU Lookup...</option>
-                          {productsData?.data?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          <option value="">Select item...</option>
+                          {productsData?.data?.map(p => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
                         </select>
+                        {!it.itemId && it.description && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!it.description?.trim()) return;
+                              try {
+                                const res = await api.post('/items', {
+                                  businessId: currentBusiness.id,
+                                  name: it.description,
+                                  sellingPrice: it.rate || 0,
+                                  taxRate: it.taxRate || 18,
+                                  unit: it.unit || 'NOS',
+                                });
+                                if (res.data.success) {
+                                  setItems(items.map(i => i.id === it.id ? { ...i, itemId: res.data.data.id } : i));
+                                  toast.success('Item created!');
+                                }
+                              } catch (err) { toast.error('Failed to create item'); }
+                            }}
+                            className="btn-primary !py-1 !text-[10px]"
+                          >
+                            + Add New Item
+                          </button>
+                        )}
                         <input
                           className="w-full bg-transparent border-none p-1 text-xs text-slate-500 font-medium focus:ring-0"
                           placeholder="Line item description detail..."
                           value={it.description}
-                          onChange={(e) => updateItem(it.id, 'description', e.target.value)}
+                          onChange={(e) => setItems(items.map(i => i.id === it.id ? { ...i, description: e.target.value } : i))}
                         />
                       </div>
                     </td>
@@ -439,18 +494,18 @@ function InvoiceBuilder() {
                 <div className="relative z-10 space-y-5">
                    <div className="flex justify-between items-center text-slate-400">
                      <span className="text-[10px] font-black uppercase tracking-[0.2em]">Net Taxable Value</span>
-                     <span className="text-lg font-bold text-white">₹{totals.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                     <span className="text-lg font-bold text-white">₹{(totals?.subtotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                    </div>
                    <div className="flex justify-between items-center text-slate-400">
                      <span className="text-[10px] font-black uppercase tracking-[0.2em]">Aggregate GST</span>
-                     <span className="text-lg font-bold text-indigo-400">₹{totals.tax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                     <span className="text-lg font-bold text-indigo-400">₹{(totals?.totalTax || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                    </div>
                    <div className="h-px bg-white/10 my-2" />
                    <div>
                      <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-1">Total Payable Amount</p>
-                     <h2 className="text-5xl font-black tracking-tighter">₹{totals.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</h2>
+                     <h2 className="text-5xl font-black tracking-tighter">₹{(totals?.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</h2>
                    </div>
-                   <p className="text-[10px] font-bold text-slate-500 italic mt-3 uppercase">Rupees {numberToWords(Math.round(totals.total))} ONLY</p>
+                   <p className="text-[10px] font-bold text-slate-500 italic mt-3 uppercase">Rupees {numberToWords(Math.round(totals?.totalAmount || 0))} ONLY</p>
                 </div>
              </section>
           </div>
@@ -476,11 +531,11 @@ function InvoiceBuilder() {
                 <div className="flex-1 overflow-auto p-12 bg-slate-300/30 flex justify-center">
                    <div className="bg-white shadow-2xl origin-top" style={{ transform: 'scale(0.85)' }}>
                      <InvoiceTemplate1
-                        invoice={{ ...formData, amountInWords: numberToWords(Math.round(totals.total)) }}
+                        invoice={{ ...formData, amountInWords: numberToWords(Math.round(totals.totalAmount)) }}
                         business={currentBusiness}
                         party={selectedParty}
                         items={items}
-                        totals={{ subtotal: totals.subtotal, cgst: totals.tax/2, sgst: totals.tax/2, total: totals.total }}
+                        totals={{ subtotal: totals.subtotal, cgst: totals.totalTax/2, sgst: totals.totalTax/2, total: totals.totalAmount }}
                       />
                    </div>
                 </div>

@@ -185,7 +185,7 @@ export function InvoiceTemplate2({ invoice, business, party, items, totals = {} 
             <td className="border-r border-black"></td>
             <td className="border-r border-black"></td>
             <td className="border-r border-black"></td>
-            <td className="text-right px-2 text-sm italic py-1">₹ {(totals?.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+            <td className="text-right px-2 text-sm italic py-1">₹ {(totals?.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
           </tr>
         </tbody>
       </table>

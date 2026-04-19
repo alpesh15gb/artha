@@ -128,9 +128,9 @@ export function EstimateTemplateAlphesh({ invoice, business, party, items: rawIt
                 <td style={{ padding: '8px', textAlign: 'center', color: '#94a3b8', fontWeight: '700', borderRight: '1px solid #d1d5db' }}>{index + 1}</td>
                 <td style={{ padding: '8px', fontWeight: '900', textTransform: 'uppercase', color: '#0f172a', borderRight: '1px solid #d1d5db' }}>{item.item?.name || item.description}</td>
                 <td style={{ padding: '8px', textAlign: 'center', color: '#475569', fontWeight: '700', borderRight: '1px solid #d1d5db' }}>{item.hsnCode || '-'}</td>
-                <td style={{ padding: '8px', textAlign: 'center', color: '#0f172a', fontWeight: '700', borderRight: '1px solid #d1d5db' }}>{item.quantity}</td>
-                <td style={{ padding: '8px', textAlign: 'right', color: '#334155', fontWeight: '700', borderRight: '1px solid #d1d5db' }}>{item.rate?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                <td style={{ padding: '8px', textAlign: 'right', color: '#0f172a', fontWeight: '900' }}>{((item.quantity * item.rate)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                <td style={{ padding: '8px', textAlign: 'center', color: '#0f172a', fontWeight: '700', borderRight: '1px solid #d1d5db' }}>{item?.quantity || 0}</td>
+                <td style={{ padding: '8px', textAlign: 'right', color: '#334155', fontWeight: '700', borderRight: '1px solid #d1d5db' }}>{(item?.rate || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                <td style={{ padding: '8px', textAlign: 'right', color: '#0f172a', fontWeight: '900' }}>{((item?.quantity || 0) * (item?.rate || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
               </tr>
             ))}
             {[...Array(Math.max(0, 8 - items.length))].map((_, i) => (
@@ -176,7 +176,7 @@ export function EstimateTemplateAlphesh({ invoice, business, party, items: rawIt
                       <td style={{ padding: '12px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span style={{ fontWeight: '700', color: '#64748b', fontSize: '10px', textTransform: 'uppercase' }}>Item Total</span>
-                          <span style={{ fontWeight: '900', color: '#0f172a' }}>{subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          <span style={{ fontWeight: '900', color: '#0f172a' }}>{(subtotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         </div>
                       </td>
                     </tr>
@@ -184,7 +184,7 @@ export function EstimateTemplateAlphesh({ invoice, business, party, items: rawIt
                       <td style={{ padding: '16px', height: '180px', verticalAlign: 'top' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '60px' }}>
                           <span style={{ fontWeight: '900', color: '#0f172a', fontSize: '14px', textTransform: 'uppercase' }}>NET TOTAL</span>
-                          <span style={{ fontWeight: '900', color: '#0f172a', fontSize: '20px' }}>₹{total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          <span style={{ fontWeight: '900', color: '#0f172a', fontSize: '20px' }}>₹{(total || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         </div>
 
                         <div style={{ textAlign: 'center' }}>

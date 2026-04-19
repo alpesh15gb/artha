@@ -3,6 +3,7 @@ import { z } from "zod";
 import prisma from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.js";
 import { verifyBusinessOwnership } from "../middleware/businessAuth.js";
+import { checkTransactionLock } from "../middleware/transactionLock.js";
 
 const router = Router();
 
@@ -85,7 +86,7 @@ router.get("/business/:businessId", async (req, res, next) => {
   }
 });
 
-router.post("/", async (req, res, next) => {
+router.post("/", checkTransactionLock("payment"), async (req, res, next) => {
   try {
     const data = createPaymentSchema.parse(req.body);
     const { adjustments, ...paymentData } = data;
@@ -286,7 +287,7 @@ router.get("/:id", async (req, res, next) => {
   }
 });
 
-router.delete("/:id", async (req, res, next) => {
+router.delete("/:id", checkTransactionLock("payment"), async (req, res, next) => {
   try {
     const payment = await prisma.payment.findFirst({
       where: { id: req.params.id, business: { userId: req.user.id } },

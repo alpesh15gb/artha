@@ -54,9 +54,11 @@ const PartyLedgerScreen = ({ partyId, onBack }) => {
         </View>
         
         <View style={{ flex: 1, marginLeft: 14 }}>
-          <Text style={[styles.ref, { color: theme.colors.text }]}>{item.ref || item.type}</Text>
+          <Text style={[styles.ref, { color: theme.colors.text }]}>
+            {item.ref ? `${item.type.slice(0,1)}${item.type.slice(1).toLowerCase()}: ${item.ref}` : item.type}
+          </Text>
           <Text style={{ fontSize: 11, color: theme.colors.textDim }}>
-            {new Date(item.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} • {item.type}
+            {new Date(item.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
           </Text>
         </View>
 

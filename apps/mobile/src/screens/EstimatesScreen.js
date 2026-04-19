@@ -28,6 +28,7 @@ const EstimatesScreen = ({ onBack, onCreate }) => {
   const [estimates, setEstimates] = useState([]);
   const [selected, setSelected] = useState(null);
   const [search, setSearch] = useState('');
+  const [lockDate, setLockDate] = useState(null);
 
   useEffect(() => { fetchEstimates(); }, []);
 
@@ -37,11 +38,24 @@ const EstimatesScreen = ({ onBack, onCreate }) => {
       const bizRes = await arthaService.client.get('/businesses');
       const bizId = bizRes.data.data?.[0]?.id;
       if (bizId) {
-        const res = await arthaService.client.get(`/estimates/business/${bizId}`);
-        setEstimates(res.data.data || []);
+        const [estRes, setRes] = await Promise.all([
+          arthaService.client.get(`/estimates/business/${bizId}`),
+          arthaService.getSettings(bizId)
+        ]);
+        setEstimates(estRes.data.data || []);
+        if (setRes.data?.enableFinancialLock) {
+          setLockDate(new Date(setRes.data.lockDate));
+        } else {
+          setLockDate(null);
+        }
       }
     } catch (e) { console.error('Fetch estimates:', e); }
     finally { setLoading(false); setRefreshing(false); }
+  };
+
+  const isLocked = (date) => {
+    if (!lockDate) return false;
+    return new Date(date) <= lockDate;
   };
 
   const changeStatus = async (est, newStatus) => {
@@ -63,15 +77,38 @@ const EstimatesScreen = ({ onBack, onCreate }) => {
 
   const showActions = (est) => {
     const isPending = est.status === 'DRAFT' || est.status === 'SENT';
+    const locked = isLocked(est.date);
+
+    if (locked) {
+      return Alert.alert(`${est.estimateNumber}  •  LOCKED`, 'This transaction is in a finalized period and cannot be modified.', [
+        { text: 'Download PDF', onPress: () => downloadPDF(est) },
+        { text: 'Share', onPress: () => shareEstimate(est) },
+        { text: 'OK', style: 'cancel' },
+      ]);
+    }
+
     Alert.alert(est.estimateNumber, `₹${est.totalAmount}  •  ${cfg(est.status).label}`, [
+...
       { text: 'Edit', onPress: () => setSelected(est) },
       { text: 'Download PDF', onPress: () => downloadPDF(est) },
       { text: 'Share', onPress: () => shareEstimate(est) },
       ...(isPending ? [
-        { text: '✅ Mark Accepted', onPress: () => changeStatus(est, 'ACCEPTED') },
-        { text: '❌ Mark Rejected', onPress: () => changeStatus(est, 'REJECTED') },
+...
       ] : []),
+      { text: 'Delete', onPress: () => deleteEstimate(est), style: 'destructive' },
       { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const deleteEstimate = async (est) => {
+    Alert.alert('Delete Estimate', `Are you sure you want to delete ${est.estimateNumber}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        try {
+          await arthaService.client.delete(`/estimates/${est.id}`);
+          fetchEstimates(true);
+        } catch (e) { Alert.alert('Error', 'Failed to delete estimate'); }
+      }},
     ]);
   };
 
@@ -104,8 +141,15 @@ const EstimatesScreen = ({ onBack, onCreate }) => {
             <FileText color={theme.colors.primary} size={15} />
             <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.textDim }}>{item.estimateNumber}</Text>
           </View>
-          <View style={[styles.badge, { backgroundColor: c.color + '20' }]}>
-            <Text style={[styles.badgeTxt, { color: c.color }]}>{c.label}</Text>
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            {isLocked(item.date) && (
+              <View style={[styles.badge, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
+                <Text style={[styles.badgeTxt, { color: '#ef4444' }]}>LOCKED</Text>
+              </View>
+            )}
+            <View style={[styles.badge, { backgroundColor: c.color + '20' }]}>
+              <Text style={[styles.badgeTxt, { color: c.color }]}>{c.label}</Text>
+            </View>
           </View>
         </View>
         <View style={styles.cardBody}>
@@ -121,32 +165,34 @@ const EstimatesScreen = ({ onBack, onCreate }) => {
             ₹{(item.totalAmount || 0).toLocaleString('en-IN')}
           </Text>
         </View>
-        <View style={styles.actionStrip}>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => setSelected(item)}>
-            <Edit3 color={theme.colors.primary} size={14} />
-            <Text style={[styles.actionTxt, { color: theme.colors.primary }]}>Edit</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => downloadPDF(item)}>
-            <Download color={theme.colors.textDim} size={14} />
-            <Text style={[styles.actionTxt, { color: theme.colors.textDim }]}>PDF</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => shareEstimate(item)}>
-            <Share2 color={theme.colors.textDim} size={14} />
-            <Text style={[styles.actionTxt, { color: theme.colors.textDim }]}>Share</Text>
-          </TouchableOpacity>
-          {(item.status === 'DRAFT' || item.status === 'SENT') && (
-            <TouchableOpacity style={styles.actionBtn} onPress={() => changeStatus(item, 'ACCEPTED')}>
-              <CheckCircle2 color='#10b981' size={14} />
-              <Text style={[styles.actionTxt, { color: '#10b981' }]}>Accept</Text>
+        {!isLocked(item.date) && (
+          <View style={styles.actionStrip}>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => setSelected(item)}>
+              <Edit3 color={theme.colors.primary} size={14} />
+              <Text style={[styles.actionTxt, { color: theme.colors.primary }]}>Edit</Text>
             </TouchableOpacity>
-          )}
-          {(item.status === 'DRAFT' || item.status === 'SENT') && (
-            <TouchableOpacity style={styles.actionBtn} onPress={() => changeStatus(item, 'REJECTED')}>
-              <XCircle color='#ef4444' size={14} />
-              <Text style={[styles.actionTxt, { color: '#ef4444' }]}>Reject</Text>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => downloadPDF(item)}>
+              <Download color={theme.colors.textDim} size={14} />
+              <Text style={[styles.actionTxt, { color: theme.colors.textDim }]}>PDF</Text>
             </TouchableOpacity>
-          )}
-        </View>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => shareEstimate(item)}>
+              <Share2 color={theme.colors.textDim} size={14} />
+              <Text style={[styles.actionTxt, { color: theme.colors.textDim }]}>Share</Text>
+            </TouchableOpacity>
+            {(item.status === 'DRAFT' || item.status === 'SENT') && (
+              <TouchableOpacity style={styles.actionBtn} onPress={() => changeStatus(item, 'ACCEPTED')}>
+                <CheckCircle2 color='#10b981' size={14} />
+                <Text style={[styles.actionTxt, { color: '#10b981' }]}>Accept</Text>
+              </TouchableOpacity>
+            )}
+            {(item.status === 'DRAFT' || item.status === 'SENT') && (
+              <TouchableOpacity style={styles.actionBtn} onPress={() => changeStatus(item, 'REJECTED')}>
+                <XCircle color='#ef4444' size={14} />
+                <Text style={[styles.actionTxt, { color: '#ef4444' }]}>Reject</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </TouchableOpacity>
     );
   };

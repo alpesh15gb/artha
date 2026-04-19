@@ -62,7 +62,7 @@ router.get('/business/:businessId', async (req, res, next) => {
       }),
     };
 
-    const [partiesData, total] = await Promise.all([
+    const [partiesData, total, defaultParties] = await Promise.all([
       prisma.party.findMany({
         where,
         orderBy: { name: 'asc' },
@@ -73,6 +73,9 @@ router.get('/business/:businessId', async (req, res, next) => {
         take: Number(limit),
       }),
       prisma.party.count({ where }),
+      prisma.defaultParty.findMany({
+        orderBy: { name: 'asc' },
+      }),
     ]);
 
     // Calculate balances for each party
@@ -107,14 +110,33 @@ router.get('/business/:businessId', async (req, res, next) => {
       };
     }));
 
+    const data = [
+      ...parties,
+      ...defaultParties.map(p => ({
+        id: p.id,
+        name: p.name,
+        partyType: p.partyType,
+        phone: p.phone,
+        email: p.email,
+        gstin: p.gstin,
+        city: p.city,
+        state: p.state,
+        isDefault: true,
+        _count: { invoices: 0, purchases: 0, transactions: 0 },
+        currentBalance: 0,
+        displayBalance: 0,
+        currentBalanceType: 'RECEIVABLE'
+      })),
+    ];
+
     res.json({
       success: true,
-      data: parties,
+      data,
       pagination: {
         page: Number(page),
         limit: Number(limit),
-        total,
-        pages: Math.ceil(total / limit),
+        total: total + defaultParties.length,
+        pages: Math.ceil((total + defaultParties.length) / limit),
       },
     });
   } catch (error) {

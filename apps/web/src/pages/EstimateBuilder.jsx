@@ -9,7 +9,7 @@ import {
   Percent, Hash, AlertCircle, CheckCircle2, MoreVertical,
   MinusCircle, FileCheck, Building2, Eye, ExternalLink,
   Info, ArrowLeft, ArrowRight, Settings, Calculator,
-  X
+  X, FileSearch
 } from 'lucide-react';
 import { format } from 'date-fns';
 import api from '../services/api';
@@ -44,6 +44,7 @@ function EstimateBuilder() {
     date: format(new Date(), 'yyyy-MM-dd'),
     expiryDate: format(new Date(Date.now() + 15 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'),
     partyId: '',
+    partyName: '',
     poNumber: '',
     stateOfSupply: '',
     notes: 'Thank you for your business!',
@@ -240,15 +241,47 @@ function EstimateBuilder() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Select Customer</label>
-                  <select
-                    className="input-base !bg-slate-50"
-                    value={formData.partyId}
-                    onChange={(e) => setFormData({ ...formData, partyId: e.target.value })}
-                  >
-                    <option value="">Search customer...</option>
-                    {partiesData?.data?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Customer</label>
+                  <div className="relative">
+                    <select
+                      className="input-base !bg-slate-50"
+                      value={formData.partyId || ''}
+                      onChange={(e) => {
+                        const found = partiesData?.data?.find(p => p.id === e.target.value);
+                        if (found) {
+                          setFormData({ ...formData, partyId: found.id, partyName: found.name });
+                        }
+                      }}
+                    >
+                      <option value="">Select customer...</option>
+                      {partiesData?.data?.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {!formData.partyId && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const name = prompt('Enter new customer name:');
+                        if (!name?.trim()) return;
+                        try {
+                          const res = await api.post('/parties', {
+                            businessId: currentBusiness.id,
+                            name: name.trim(),
+                            partyType: 'CUSTOMER',
+                          });
+                          if (res.data.success) {
+                            setFormData({ ...formData, partyId: res.data.data.id, partyName: res.data.data.name });
+                            toast.success('Customer created!');
+                          }
+                        } catch (err) { toast.error('Failed to create customer'); }
+                      }}
+                      className="btn-primary !py-1.5 !text-xs"
+                    >
+                      + Add New Customer
+                    </button>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Phone / Mobile</label>
@@ -261,7 +294,7 @@ function EstimateBuilder() {
                 <textarea
                   readOnly disabled
                   className="input-base !bg-slate-100/50 cursor-not-allowed min-h-[60px]"
-                  value={selectedParty?.address || 'Select a customer to see address details'}
+                  value={selectedParty?.address || (formData.partyName ? '(New customer)' : 'Select a customer to see address details')}
                 />
               </div>
             </section>
@@ -368,21 +401,59 @@ function EstimateBuilder() {
                     <td className="text-center text-xs font-bold text-slate-300">{idx + 1}</td>
                     <td>
                       <div className="space-y-1.5 p-1">
-                        <select
-                          className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-sm font-bold text-slate-900 focus:border-indigo-400 outline-none"
-                          value={it.itemId || ''}
-                          onChange={(e) => updateItem(it.id, 'itemId', e.target.value)}
-                        >
-                          <option value="">SKU Lookup...</option>
-                          {productsData?.data?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                        </select>
+                          <select
+                            className="w-full bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-sm font-bold text-slate-900 focus:border-indigo-400 outline-none"
+                            value={it.itemId || ''}
+                            onChange={(e) => {
+                              const found = productsData?.data?.find(p => p.id === e.target.value);
+                              if (found) {
+                                setItems(items.map(i => i.id === it.id ? {
+                                  ...i,
+                                  itemId: found.id,
+                                  description: found.name,
+                                  rate: found.sellingPrice || 0,
+                                  taxRate: found.taxRate || 0,
+                                  unit: found.unit || i.unit,
+                                } : i));
+                              }
+                            }}
+                          >
+                            <option value="">Select item...</option>
+                            {productsData?.data?.map(p => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        {!it.itemId && it.description && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!it.description?.trim()) return;
+                              try {
+                                const res = await api.post('/items', {
+                                  businessId: currentBusiness.id,
+                                  name: it.description,
+                                  sellingPrice: it.rate || 0,
+                                  taxRate: it.taxRate || 18,
+                                  unit: it.unit || 'NOS',
+                                });
+                                if (res.data.success) {
+                                  updateItem(it.id, 'itemId', res.data.data.id);
+                                  toast.success('Item created!');
+                                }
+                              } catch (err) { toast.error('Failed to create item'); }
+                            }}
+                            className="btn-primary !py-1 !text-[10px]"
+                          >
+                            + Add New Item
+                          </button>
+                        )}
                         <input
                           className="w-full bg-transparent border-none p-1 text-xs text-slate-500 font-medium focus:ring-0 placeholder:italic"
                           placeholder="Line item description detail..."
                           value={it.description}
                           onChange={(e) => updateItem(it.id, 'description', e.target.value)}
                         />
-                      </div>
                     </td>
                     <td>
                       <select
@@ -477,21 +548,21 @@ function EstimateBuilder() {
                   <div className="relative z-10 space-y-4">
                     <div className="flex justify-between items-center text-slate-400">
                       <span className="text-xs font-bold uppercase tracking-widest">Subtotal ({formData.isTaxInclusive ? 'Inclusive' : 'Exclusive'})</span>
-                      <span className="text-base font-bold text-white">₹{totals.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      <span className="text-base font-bold text-white">₹{(totals?.subtotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                     </div>
                     <div className="flex justify-between items-center text-slate-400">
                       <span className="text-xs font-bold uppercase tracking-widest">Calculated TAX (GST)</span>
-                      <span className="text-base font-bold text-indigo-400">₹{totals.tax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      <span className="text-base font-bold text-indigo-400">₹{(totals?.tax || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                     </div>
                     <div className="h-px bg-white/10 my-4" />
                     <div className="flex justify-between items-end">
                       <div>
                         <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-1">Final Amount</p>
-                        <h3 className="text-4xl font-black text-white tracking-tighter">₹{totals.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</h3>
+                        <h3 className="text-4xl font-black text-white tracking-tighter">₹{(totals?.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</h3>
                       </div>
                     </div>
                     <p className="text-[10px] font-bold text-slate-500 italic mt-4 max-w-[80%] uppercase leading-relaxed">
-                      Rupees {numberToWords(Math.round(totals.total))} Only
+                      Rupees {numberToWords(Math.round(totals.totalAmount))} Only
                     </p>
                   </div>
                </div>
@@ -527,11 +598,11 @@ function EstimateBuilder() {
                 <div className="flex-1 overflow-auto p-12 bg-slate-300/30 flex justify-center custom-scrollbar">
                    <div className="bg-white shadow-2xl origin-top" style={{ transform: 'scale(0.9)' }}>
                      <EstimateTemplateAlphesh
-                        invoice={{ ...formData, amountInWords: numberToWords(Math.round(totals.total)) }}
+                        invoice={{ ...formData, amountInWords: numberToWords(Math.round(totals.totalAmount)) }}
                         business={currentBusiness}
                         party={selectedParty}
                         items={items}
-                        totals={{ subtotal: totals.subtotal, total: totals.total }}
+                        totals={{ subtotal: totals.subtotal, total: totals.totalAmount }}
                       />
                    </div>
                 </div>
@@ -549,11 +620,11 @@ function EstimateBuilder() {
             {/* Print Area Overlay */}
             <div id="print-root" className="fixed inset-0 hidden print:block bg-white z-[99999]">
               <EstimateTemplateAlphesh
-                invoice={{ ...formData, amountInWords: numberToWords(Math.round(totals.total)) }}
+                invoice={{ ...formData, amountInWords: numberToWords(Math.round(totals.totalAmount)) }}
                 business={currentBusiness}
                 party={selectedParty}
                 items={items}
-                totals={{ subtotal: totals.subtotal, total: totals.total }}
+                totals={{ subtotal: totals.subtotal, total: totals.totalAmount }}
               />
             </div>
           </Portal>

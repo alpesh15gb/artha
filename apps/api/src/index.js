@@ -90,22 +90,24 @@ app.listen(PORT, "0.0.0.0", async () => {
     });
 
     // Seed Platinum Plan (Single Tier)
-    await prisma.plan.deleteMany(); // Clear existing tiers
-    await prisma.plan.create({
-      data: {
-        name: "Platinum",
-        price: 999,
-        duration: 365, // Yearly billing
-        features: {
-          businesses: "Unlimited",
-          invoices: "Unlimited",
-          items: "Unlimited",
-          parties: "Unlimited",
-          reports: "Unlimited",
+    const existingPlan = await prisma.plan.findFirst({ where: { name: "Platinum" } });
+    if (!existingPlan) {
+      await prisma.plan.create({
+        data: {
+          name: "Platinum",
+          price: 999,
+          duration: 365, // Yearly billing
+          features: {
+            businesses: "Unlimited",
+            invoices: "Unlimited",
+            items: "Unlimited",
+            parties: "Unlimited",
+            reports: "Unlimited",
+          },
         },
-      },
-    });
-    console.log("Seeded Platinum Unlimited Plan (Yearly: 999)");
+      });
+      console.log("Seeded Platinum Unlimited Plan (Yearly: 999)");
+    }
 
     console.log("Successfully initialized system bootstrap.");
   } catch (e) {

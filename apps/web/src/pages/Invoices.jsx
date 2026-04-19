@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
@@ -138,7 +138,7 @@ function Invoices() {
     onError: () => toast.error("Failed to delete"),
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (previewInvoice || isExporting)
       document.body.classList.add("is-printing");
     else document.body.classList.remove("is-printing");

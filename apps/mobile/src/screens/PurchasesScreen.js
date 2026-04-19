@@ -27,6 +27,7 @@ const PurchasesScreen = ({ onBack, onCreate }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [purchases, setPurchases] = useState([]);
   const [search, setSearch] = useState('');
+  const [lockDate, setLockDate] = useState(null);
 
   useEffect(() => { fetchPurchases(); }, []);
 
@@ -36,8 +37,16 @@ const PurchasesScreen = ({ onBack, onCreate }) => {
       const bizRes = await arthaService.client.get('/businesses');
       const bizId = bizRes.data.data?.[0]?.id;
       if (bizId) {
-        const res = await arthaService.getPurchases(bizId);
-        setPurchases(res.data || []);
+        const [purRes, setRes] = await Promise.all([
+           arthaService.getPurchases(bizId),
+           arthaService.getSettings(bizId)
+        ]);
+        setPurchases(purRes.data || []);
+        if (setRes.data?.enableFinancialLock) {
+          setLockDate(new Date(setRes.data.lockDate));
+        } else {
+          setLockDate(null);
+        }
       }
     } catch (e) {
       console.error('Fetch purchases:', e);
@@ -47,12 +56,18 @@ const PurchasesScreen = ({ onBack, onCreate }) => {
     }
   };
 
-  const deletePurchase = (id) => {
-    Alert.alert('Confirm Delete', 'Delete this purchase? Stock will be reversed.', [
+  const isLocked = (date) => {
+    if (!lockDate) return false;
+    return new Date(date) <= lockDate;
+  };
+
+  const deletePurchase = (item) => {
+    if (isLocked(item.date)) return Alert.alert('Locked', 'This transaction is in a finalized period.');
+    Alert.alert('Confirm Delete', `Delete purchase ${item.purchaseNumber}? Stock will be reversed.`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try {
-          await arthaService.client.delete(`/purchases/${id}`);
+          await arthaService.client.delete(`/purchases/${item.id}`);
           fetchPurchases(true);
         } catch (e) { Alert.alert('Error', 'Failed to delete'); }
       }}
@@ -73,8 +88,15 @@ const PurchasesScreen = ({ onBack, onCreate }) => {
             <ShoppingBag color={theme.colors.primary} size={15} />
             <Text style={{ fontSize: 11, fontWeight: '700', color: theme.colors.textDim }}>{item.purchaseNumber}</Text>
           </View>
-          <View style={[styles.badge, { backgroundColor: c.color + '15' }]}>
-            <Text style={[styles.badgeTxt, { color: c.color }]}>{c.label}</Text>
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            {isLocked(item.date) && (
+              <View style={[styles.badge, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
+                <Text style={[styles.badgeTxt, { color: '#ef4444' }]}>LOCKED</Text>
+              </View>
+            )}
+            <View style={[styles.badge, { backgroundColor: c.color + '15' }]}>
+              <Text style={[styles.badgeTxt, { color: c.color }]}>{c.label}</Text>
+            </View>
           </View>
         </View>
 
@@ -94,13 +116,15 @@ const PurchasesScreen = ({ onBack, onCreate }) => {
         </View>
 
         <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => Alert.alert('Details', `Supplier: ${item.party?.name}\nTotal: ₹${item.totalAmount}\nPaid: ₹${item.paidAmount}\nBalance: ₹${item.balanceDue}`)}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => Alert.alert('Details', `Supplier: ${item.party?.name}\nTotal: ₹${item.totalAmount}\nPaid: ₹${item.paidAmount}\nBalance: ₹${item.balanceDue}${isLocked(item.date) ? '\n\n🔒 THIS TRANSACTION IS LOCKED' : ''}`)}>
              <Text style={[styles.actionTxt, { color: theme.colors.textDim }]}>Details</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => deletePurchase(item.id)}>
-             <Trash2 color="#ef444450" size={14} />
-             <Text style={[styles.actionTxt, { color: '#ef444490' }]}>Delete</Text>
-          </TouchableOpacity>
+          {!isLocked(item.date) && (
+            <TouchableOpacity style={styles.actionBtn} onPress={() => deletePurchase(item)}>
+               <Trash2 color="#ef444450" size={14} />
+               <Text style={[styles.actionTxt, { color: '#ef444490' }]}>Delete</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );

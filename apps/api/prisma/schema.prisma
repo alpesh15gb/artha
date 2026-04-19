@@ -812,6 +812,38 @@ model Plan {
   @@map("plans")
 }
 
+model DefaultItem {
+  id            String   @id @default(uuid())
+  name          String
+  sku           String?
+  hsnCode       String?
+  description   String?
+  category      String?
+  unit          String   @default("NOS")
+  taxRate       Float    @default(18)
+  sellingPrice  Float    @default(0)
+  purchasePrice Float    @default(0)
+  isService     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  @@map("default_items")
+}
+
+model DefaultParty {
+  id              String      @id @default(uuid())
+  name            String
+  partyType       PartyType   @default(CUSTOMER)
+  gstin           String?
+  pan             String?
+  email           String?
+  phone           String?
+  address         String?
+  city            String?
+  state           String?
+  isRegistered    Boolean     @default(false)
+  createdAt       DateTime    @default(now())
+  @@map("default_parties")
+}
+
 model Subscription {
   id               String           @id @default(uuid())
   userId           String

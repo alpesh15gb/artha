@@ -8,6 +8,7 @@
     "apps/web",
     "apps/api",
     "apps/desktop",
+    "apps/mobile",
     "packages/*"
   ],
   "scripts": {

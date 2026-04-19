@@ -1,4 +1,4 @@
-import React from "react";
+import { useEffect } from "react";
 import { useLocation, Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore, useBusinessStore } from "./store/auth";
 import Layout from "./components/Layout";
@@ -32,11 +32,9 @@ function ProtectedRoute({ children }) {
 
   if (!isHydrated) {
     return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center gap-4">
-        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-indigo-200 font-bold uppercase tracking-widest text-[10px]">
-          Restoring Session...
-        </p>
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4">
+        <div className="w-10 h-10 border-4 border-sky-600 border-t-transparent rounded-full animate-spin" />
+        <p className="text-slate-500 font-medium text-sm">Loading...</p>
       </div>
     );
   }
@@ -45,34 +43,30 @@ function ProtectedRoute({ children }) {
     return <Navigate to="/login" />;
   }
 
-  // Wait for businesses to load before making redirection decisions
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center gap-4">
-        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-indigo-200 font-bold uppercase tracking-widest text-[10px]">
-          Initializing Workspace...
-        </p>
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4">
+        <div className="w-10 h-10 border-4 border-sky-600 border-t-transparent rounded-full animate-spin" />
+        <p className="text-slate-500 font-medium text-sm">Loading...</p>
       </div>
     );
   }
 
-  // If authenticated but no businesses, and not already on onboarding or superadmin
-  if (
-    businesses.length === 0 &&
-    !location.pathname.startsWith("/onboarding") &&
-    !location.pathname.startsWith("/superadmin")
-  ) {
+  if (businesses.length === 0 && !location.pathname.startsWith("/onboarding") && !location.pathname.startsWith("/superadmin")) {
     return <Navigate to="/onboarding" />;
   }
 
   return children;
 }
 
+function BuilderLayout({ children }) {
+  return <div className="min-h-screen bg-slate-50">{children}</div>;
+}
+
 function App() {
   const { initAuth, isAuthenticated, isHydrated } = useAuthStore();
 
-  React.useEffect(() => {
+  useEffect(() => {
     initAuth();
   }, []);
 
@@ -80,64 +74,38 @@ function App() {
 
   return (
     <Routes>
-      <Route
-        path="/"
-        element={
-          isAuthenticated ? <Navigate to="/dashboard" replace /> : <Landing />
-        }
-      />
+      <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Landing />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
-      <Route
-        path="/onboarding"
-        element={
-          <ProtectedRoute>
-            <BusinessOnboarding />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/*"
-        element={
-          <ProtectedRoute>
-            <Layout>
-              <Routes>
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route
-                  path="/"
-                  element={<Navigate to="/dashboard" replace />}
-                />
-                <Route path="/parties" element={<Parties />} />
-                <Route path="/items" element={<Items />} />
-                <Route path="/invoices" element={<Invoices />} />
-                <Route path="/invoices/new" element={<InvoiceBuilder />} />
-                <Route path="/invoices/edit/:id" element={<InvoiceBuilder />} />
-                <Route path="/estimates" element={<Estimates />} />
-                <Route path="/estimates/new" element={<EstimateBuilder />} />
-                <Route
-                  path="/estimates/edit/:id"
-                  element={<EstimateBuilder />}
-                />
-                <Route path="/purchases" element={<Purchases />} />
-                <Route path="/purchases/new" element={<PurchaseBuilder />} />
-                <Route
-                  path="/purchases/edit/:id"
-                  element={<PurchaseBuilder />}
-                />
-                <Route path="/payments" element={<Payments />} />
-                <Route path="/expenses" element={<Expenses />} />
-                <Route path="/accounts" element={<Accounts />} />
-                <Route path="/tasks" element={<Tasks />} />
-                <Route path="/complaints" element={<Complaints />} />
-                <Route path="/reports" element={<Reports />} />
-                <Route path="/import" element={<Import />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/superadmin" element={<SuperAdmin />} />
-              </Routes>
-            </Layout>
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/onboarding" element={<ProtectedRoute><BusinessOnboarding /></ProtectedRoute>} />
+      
+      {/* Builder pages - no sidebar/header */}
+      <Route path="/invoices/new" element={<ProtectedRoute><BuilderLayout><InvoiceBuilder /></BuilderLayout></ProtectedRoute>} />
+      <Route path="/invoices/edit/:id" element={<ProtectedRoute><BuilderLayout><InvoiceBuilder /></BuilderLayout></ProtectedRoute>} />
+      <Route path="/estimates/new" element={<ProtectedRoute><BuilderLayout><EstimateBuilder /></BuilderLayout></ProtectedRoute>} />
+      <Route path="/estimates/edit/:id" element={<ProtectedRoute><BuilderLayout><EstimateBuilder /></BuilderLayout></ProtectedRoute>} />
+      <Route path="/purchases/new" element={<ProtectedRoute><BuilderLayout><PurchaseBuilder /></BuilderLayout></ProtectedRoute>} />
+      <Route path="/purchases/edit/:id" element={<ProtectedRoute><BuilderLayout><PurchaseBuilder /></BuilderLayout></ProtectedRoute>} />
+      
+      {/* Main app with sidebar/header */}
+      <Route path="/*" element={<ProtectedRoute><Layout><Routes>
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/parties" element={<Parties />} />
+        <Route path="/items" element={<Items />} />
+        <Route path="/invoices" element={<Invoices />} />
+        <Route path="/estimates" element={<Estimates />} />
+        <Route path="/purchases" element={<Purchases />} />
+        <Route path="/payments" element={<Payments />} />
+        <Route path="/expenses" element={<Expenses />} />
+        <Route path="/accounts" element={<Accounts />} />
+        <Route path="/reports" element={<Reports />} />
+        <Route path="/import" element={<Import />} />
+        <Route path="/settings" element={<Settings />} />
+        <Route path="/tasks" element={<Tasks />} />
+        <Route path="/complaints" element={<Complaints />} />
+        <Route path="/superadmin" element={<SuperAdmin />} />
+      </Routes></Layout></ProtectedRoute>} />
     </Routes>
   );
 }

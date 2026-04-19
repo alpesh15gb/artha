@@ -3,6 +3,7 @@ import { z } from "zod";
 import prisma from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.js";
 import { verifyBusinessOwnership } from "../middleware/businessAuth.js";
+import { checkTransactionLock } from "../middleware/transactionLock.js";
 
 const router = Router();
 
@@ -152,7 +153,7 @@ router.get("/business/:businessId", async (req, res, next) => {
   }
 });
 
-router.post("/", async (req, res, next) => {
+router.post("/", checkTransactionLock("purchase"), async (req, res, next) => {
   try {
     const data = createPurchaseSchema.parse(req.body);
     const { items, ...purchaseData } = data;
@@ -221,6 +222,23 @@ router.post("/", async (req, res, next) => {
     const purchaseNumber = `PUR-${String(nextNum).padStart(5, "0")}`;
 
     const result = await prisma.$transaction(async (tx) => {
+      // 1. Verify item IDs exist
+      const itemIds = normalizedItems.map(i => i.itemId).filter(Boolean);
+      let validNormalizedItems = [];
+      if (itemIds.length > 0) {
+        const dbItems = await tx.item.findMany({
+          where: { id: { in: itemIds }, businessId: purchaseData.businessId },
+          select: { id: true }
+        });
+        const validIds = new Set(dbItems.map(i => i.id));
+        validNormalizedItems = normalizedItems.map(item => ({
+          ...item,
+          itemId: item.itemId && validIds.has(item.itemId) ? item.itemId : null
+        }));
+      } else {
+        validNormalizedItems = normalizedItems;
+      }
+
       const purchase = await tx.purchase.create({
         data: {
           businessId: purchaseData.businessId,
@@ -248,7 +266,7 @@ router.post("/", async (req, res, next) => {
           notes: purchaseData.notes || null,
           terms: purchaseData.terms || null,
           items: {
-            create: normalizedItems,
+            create: validNormalizedItems,
           },
           status:
             purchaseData.paidAmount >= purchaseData.totalAmount
@@ -260,7 +278,7 @@ router.post("/", async (req, res, next) => {
         include: { items: true },
       });
 
-      for (const item of normalizedItems) {
+      for (const item of validNormalizedItems) {
         if (item.itemId) {
           await tx.item.update({
             where: { id: item.itemId },
@@ -340,7 +358,7 @@ router.get("/:id", async (req, res, next) => {
   }
 });
 
-router.put("/:id", async (req, res, next) => {
+router.put("/:id", checkTransactionLock("purchase"), async (req, res, next) => {
   try {
     const data = createPurchaseSchema.parse(req.body);
     const { id } = req.params;
@@ -455,7 +473,7 @@ router.patch("/:id/status", async (req, res, next) => {
   }
 });
 
-router.post("/:id/payment", async (req, res, next) => {
+router.post("/:id/payment", checkTransactionLock("purchase"), async (req, res, next) => {
   try {
     const data = recordPurchasePaymentSchema.parse(req.body);
     const paymentDate = data.date ? new Date(data.date) : new Date();
@@ -548,7 +566,7 @@ router.post("/:id/payment", async (req, res, next) => {
   }
 });
 
-router.delete("/:id", async (req, res, next) => {
+router.delete("/:id", checkTransactionLock("purchase"), async (req, res, next) => {
   try {
     const check = await prisma.purchase.findFirst({
       where: { id: req.params.id, business: { userId: req.user.id } },

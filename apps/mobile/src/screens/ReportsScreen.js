@@ -74,11 +74,17 @@ const ReportsScreen = ({ onBack }) => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.colors.primary]} />
         }
       >
-        <View style={[styles.periodBadge, { backgroundColor: theme.colors.surface }]}>
-          <Calendar color={theme.colors.primary} size={16} />
-          <Text style={{ color: theme.colors.textDim, marginLeft: 8 }}>
-            {new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' })}
-          </Text>
+        <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20 }}>
+          <View style={[styles.periodBadge, { backgroundColor: theme.colors.surface, marginBottom: 0 }]}>
+            <Calendar color={theme.colors.primary} size={16} />
+            <Text style={{ color: theme.colors.textDim, marginLeft: 8 }}>
+              {new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' })}
+            </Text>
+          </View>
+          <View style={[styles.periodBadge, { backgroundColor: theme.colors.surface, marginBottom: 0 }]}>
+            <ShieldCheck color={theme.colors.success} size={16} />
+            <Text style={{ color: theme.colors.textDim, marginLeft: 8, fontSize: 12 }}>Compliance: ACTIVE</Text>
+          </View>
         </View>
 
         {loading ? (
