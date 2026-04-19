@@ -38,3 +38,13 @@ prisma/migrations/
 
 # Docker
 docker/ssl/
+
+# Turbo
+.turbo/
+
+# Temporary and Tool files
+brain/
+chatgpt.txt
+check_excel.js
+Reports/
+.watchmanconfig

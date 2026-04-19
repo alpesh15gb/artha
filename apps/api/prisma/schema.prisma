@@ -1,0 +1,958 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String?
+  phone     String?
+  isActive  Boolean  @default(true)
+  role      UserRole @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  businesses Business[]
+  sessions   Session[]
+  subscriptions Subscription[]
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  ACCOUNTANT
+  USER
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("sessions")
+}
+
+model Business {
+  id              String   @id @default(uuid())
+  userId          String
+  name            String
+  legalName       String?
+  gstin           String?  @unique
+  pan             String?
+  address         Json?
+  phone           String?
+  email           String?
+  website         String?
+  logo            String?
+  signatureImage  String?
+  upiId           String?
+  bankDetails     Json?
+  isActive        Boolean  @default(true)
+  fiscalYearStart DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parties        Party[]
+  items          Item[]
+  invoices       Invoice[]
+  estimates      Estimate[]
+  purchases      Purchase[]
+  payments       Payment[]
+  expenses       Expense[]
+  receipts       Receipt[]
+  journalEntries JournalEntry[]
+  bankAccounts   BankAccount[]
+  cashAccounts   CashAccount[]
+  transactions   Transaction[]
+  settings       BusinessSettings?
+  tasks          Task[]
+  complaints     Complaint[]
+  @@map("businesses")
+}
+
+model BusinessSettings {
+  id                     String  @id @default(uuid())
+  businessId             String  @unique
+  // Currency & Format
+  currency               String  @default("INR")
+  currencySymbol         String  @default("₹")
+  currencyPosition       String  @default("prefix")
+  decimalPlaces          Int     @default(2)
+  thousandsSeparator     String  @default(",")
+  dateFormat             String  @default("DD/MM/YYYY")
+  timeZone               String  @default("Asia/Kolkata")
+  // Numbering
+  invoicePrefix          String  @default("INV")
+  invoiceStartNumber     Int     @default(1)
+  estimatePrefix         String  @default("EST")
+  estimateStartNumber    Int     @default(1)
+  receiptPrefix          String  @default("RCP")
+  receiptStartNumber     Int     @default(1)
+  paymentPrefix          String  @default("PAY")
+  paymentStartNumber     Int     @default(1)
+  purchasePrefix         String  @default("PUR")
+  purchaseStartNumber    Int     @default(1)
+  voucherPrefix          String  @default("VCH")
+  invoiceNumberFormat    String? @default("PREFIX-NUMBER")
+  autoNumbering          Boolean @default(true)
+  // GST & Tax
+  enableGst              Boolean @default(true)
+  gstRegistrationType    String  @default("REGULAR")
+  stateCode              String  @default("27")
+  defaultTaxRate         Float   @default(18)
+  cgstRate               Float   @default(9)
+  sgstRate               Float   @default(9)
+  igstRate               Float   @default(18)
+  cessRate               Float   @default(0)
+  enableReverseCharge    Boolean @default(false)
+  enableEInvoice         Boolean @default(false)
+  eInvoiceUsername       String?
+  eInvoicePassword       String?
+  eInvoiceGstin          String?
+  enableEWayBill         Boolean @default(false)
+  defaultHsnCode         String?
+  // Business Info
+  businessType           String?
+  businessCategory       String?
+  msmeNumber             String?
+  ludNo                   String?
+  exportInvoicePrefix     String  @default("EXP")
+  sezUnit                  Boolean @default(false)
+  // Invoice Defaults
+  defaultPaymentTerms    Int     @default(30)
+  defaultDueDays          Int     @default(15)
+  defaultInvoiceTerms     String?
+  defaultInvoiceNotes     String?
+  showQrCode              Boolean @default(true)
+  showBankDetails         Boolean @default(true)
+  showSignature           Boolean @default(true)
+  showHsnCode             Boolean @default(true)
+  showQuantity            Boolean @default(true)
+  showRate                Boolean @default(true)
+  showDiscount            Boolean @default(true)
+  showTaxBreakup          Boolean @default(true)
+  // Template
+  invoiceTemplate         String  @default("modern")
+  themeColor             String  @default("#4F46E5")
+  fontFamily             String  @default("Inter")
+  footerMessage          String?
+  // Notifications
+  emailOnInvoiceCreate    Boolean @default(true)
+  emailOnPaymentReceive   Boolean @default(true)
+  emailOnInvoiceOverdue   Boolean @default(true)
+  reminderDays            Int     @default(7)
+  reminderFrequency       Int     @default(3)
+  autoEmailStatements     Boolean @default(false)
+  statementFrequency      String  @default("monthly")
+  emailCC                 String?
+  // Banking
+  defaultBankAccountId    String?
+  defaultCashAccountId    String?
+  // Financial Year
+  financialYearStart      String  @default("04-01")
+  enableFinancialLock    Boolean @default(false)
+  lockDate               DateTime?
+  // Security
+  requireApproval         Boolean @default(false)
+  allowEditAfterSend     Boolean @default(true)
+  // Integrations
+  razorpayKeyId          String?
+  razorpayKeySecret      String?
+  enableOnlinePayments   Boolean @default(false)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  taxRates TaxRate[]
+  accounts Account[]
+  emailTemplates EmailTemplate[]
+  @@map("business_settings")
+}
+
+model TaxRate {
+  id          String  @id @default(uuid())
+  businessId  String
+  name        String
+  rate        Float
+  cgstRate    Float   @default(0)
+  sgstRate    Float   @default(0)
+  igstRate    Float   @default(0)
+  cessRate    Float   @default(0)
+  hsnCode     String?
+  description String?
+  isActive    Boolean @default(true)
+  isDefault   Boolean @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  settings    BusinessSettings @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  @@map("tax_rates")
+}
+
+model Account {
+  id           String      @id @default(uuid())
+  businessId   String
+  code         String?
+  name         String
+  type         AccountType
+  subType      String?
+  parentId     String?
+  openingBalance Float    @default(0)
+  balance      Float       @default(0)
+  isBankAccount Boolean    @default(false)
+  isCashAccount Boolean    @default(false)
+  bankName     String?
+  accountNumber String?
+  ifscCode     String?
+  gstApplicable Boolean    @default(false)
+  isActive     Boolean     @default(true)
+  description  String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  settings     BusinessSettings @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  parent       Account?     @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children     Account[]    @relation("AccountHierarchy")
+  @@map("accounts")
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+  DIRECT_INCOME
+  DIRECT_EXPENSE
+  INDIRECT_INCOME
+  INDIRECT_EXPENSE
+}
+
+model EmailTemplate {
+  id          String  @id @default(uuid())
+  businessId  String
+  type        EmailTemplateType
+  name        String
+  subject     String
+  body        String  @db.Text
+  isDefault   Boolean @default(false)
+  isActive    Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  settings    BusinessSettings @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  @@map("email_templates")
+}
+
+enum EmailTemplateType {
+  INVOICE_CREATE
+  INVOICE_REMINDER
+  INVOICE_OVERDUE
+  PAYMENT_RECEIVED
+  ESTIMATE_CREATE
+  ESTIMATE_APPROVED
+  ESTIMATE_REJECTED
+  PAYMENT_LINK
+  STATEMENT
+  CUSTOM
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  businessId  String
+  userId      String
+  action      String
+  entityType  String
+  entityId    String?
+  oldValue    Json?
+  newValue    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+  @@map("audit_logs")
+}
+
+model Party {
+  id              String      @id @default(uuid())
+  businessId      String
+  name            String
+  partyType       PartyType   @default(CUSTOMER)
+  gstin           String?
+  pan             String?
+  email           String?
+  phone           String?
+  whatsapp        String?
+  billingAddress  Json?
+  shippingAddress Json?
+  address         String?
+  city            String?
+  pincode         String?
+  state           String?
+  creditLimit     Float?
+  openingBalance  Float       @default(0)
+  balanceType     BalanceType @default(RECEIVABLE)
+  dueDays         Int         @default(0)
+  taxability      String      @default("taxable")
+  isRegistered    Boolean     @default(false)
+  isActive        Boolean     @default(true)
+  notes           String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  purchases    Purchase[]
+  invoices     Invoice[]
+  estimates    Estimate[]
+  payments     Payment[]
+  receipts     Receipt[]
+  expenses     Expense[]
+  tasks        Task[]
+  complaints   Complaint[]
+  @@map("parties")
+}
+
+enum PartyType {
+  CUSTOMER
+  SUPPLIER
+  BOTH
+}
+
+enum BalanceType {
+  RECEIVABLE
+  PAYABLE
+}
+
+model Item {
+  id            String   @id @default(uuid())
+  businessId    String
+  name          String
+  sku           String?
+  hsnCode       String?
+  barcode       String?
+  description   String?
+  category      String?
+  unit          String   @default("NOS")
+  taxRate       Float    @default(18)
+  taxability    String   @default("taxable")
+  sellingPrice  Float    @default(0)
+  purchasePrice Float    @default(0)
+  mrp           Float?
+  openingStock  Float    @default(0)
+  currentStock  Float    @default(0)
+  reorderLevel  Float?
+  godown        String?
+  imageUrl      String?
+  isActive      Boolean  @default(true)
+  isService     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  business      Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  invoiceItems  InvoiceItem[]
+  estimateItems EstimateItem[]
+  purchaseItems PurchaseItem[]
+  @@map("items")
+}
+
+model Purchase {
+  id              String         @id @default(uuid())
+  businessId      String
+  purchaseNumber  String
+  invoiceType     PurchaseType   @default(PURCHASE_INVOICE)
+  partyId         String
+  date            DateTime
+  dueDate         DateTime?
+  reverseCharge   Boolean        @default(false)
+  isTaxInclusive  Boolean        @default(false)
+  stateOfSupply   String?
+  subtotal        Float
+  discountAmount  Float          @default(0)
+  discountPercent Float          @default(0)
+  cgstAmount      Float          @default(0)
+  sgstAmount      Float          @default(0)
+  igstAmount      Float          @default(0)
+  cessAmount      Float          @default(0)
+  roundOff        Float          @default(0)
+  totalAmount     Float
+  amountInWords   String?
+  paidAmount      Float          @default(0)
+  balanceDue      Float
+  status          PurchaseStatus @default(DRAFT)
+  notes           String?
+  terms           String?
+  billingAddress  Json?
+  shippingAddress Json?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  business Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  party    Party          @relation(fields: [partyId], references: [id])
+  items    PurchaseItem[]
+  adjustments PaymentAdjustment[]
+  @@unique([businessId, purchaseNumber])
+  @@map("purchases")
+}
+
+enum PurchaseType {
+  PURCHASE_INVOICE
+  PURCHASE_ORDER
+  DEBIT_NOTE
+  CREDIT_NOTE
+}
+
+enum PurchaseStatus {
+  DRAFT
+  ORDERED
+  RECEIVED
+  PARTIAL
+  PAID
+  CANCELLED
+}
+
+model PurchaseItem {
+  id              String  @id @default(uuid())
+  purchaseId      String
+  itemId          String?
+  description     String
+  hsnCode         String?
+  quantity        Float
+  unit            String  @default("NOS")
+  rate            Float
+  discountPercent Float   @default(0)
+  discountAmount  Float   @default(0)
+  taxableAmount   Float
+  cgstRate        Float   @default(0)
+  cgstAmount      Float   @default(0)
+  sgstRate        Float   @default(0)
+  sgstAmount      Float   @default(0)
+  igstRate        Float   @default(0)
+  igstAmount      Float   @default(0)
+  cessRate        Float   @default(0)
+  cessAmount      Float   @default(0)
+  totalAmount     Float
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  item     Item?    @relation(fields: [itemId], references: [id])
+  @@map("purchase_items")
+}
+
+model Invoice {
+  id              String        @id @default(uuid())
+  businessId      String
+  invoiceNumber   String
+  invoiceType     InvoiceType   @default(TAX_INVOICE)
+  template        String        @default("template1")
+  partyId         String
+  date            DateTime
+  dueDate         DateTime?
+  reverseCharge   Boolean       @default(false)
+  isTaxInclusive  Boolean       @default(false)
+  stateOfSupply   String?
+  billingAddress  Json?
+  shippingAddress Json?
+  subtotal        Float
+  discountAmount  Float         @default(0)
+  discountPercent Float         @default(0)
+  cgstAmount      Float         @default(0)
+  sgstAmount      Float         @default(0)
+  igstAmount      Float         @default(0)
+  cessAmount      Float         @default(0)
+  roundOff        Float         @default(0)
+  totalAmount     Float
+  amountInWords   String?
+  paidAmount      Float         @default(0)
+  balanceDue      Float
+  status          InvoiceStatus @default(DRAFT)
+  notes           String?
+  terms           String?
+  tags            String[]      @default([])
+  transportMode   String?
+  vehicleNo       String?
+  lrNo            String?
+  lrDate          DateTime?
+  totalBoxes      Int?
+  irn             String?
+  ackNo           String?
+  ackDate         DateTime?
+  qrCode          String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  business Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  party    Party         @relation(fields: [partyId], references: [id])
+  items    InvoiceItem[]
+  adjustments PaymentAdjustment[]
+  @@unique([businessId, invoiceNumber])
+  @@map("invoices")
+}
+
+enum InvoiceType {
+  TAX_INVOICE
+  BILL_OF_SUPPLY
+  EXPORT_INVOICE
+  SEZ_INVOICE
+  CREDIT_NOTE
+  DEBIT_NOTE
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  PARTIAL
+  OVERDUE
+  CANCELLED
+}
+
+model InvoiceItem {
+  id              String  @id @default(uuid())
+  invoiceId       String
+  itemId          String?
+  description     String
+  hsnCode         String?
+  quantity        Float
+  unit            String  @default("NOS")
+  rate            Float
+  discountPercent Float   @default(0)
+  discountAmount  Float   @default(0)
+  taxableAmount   Float
+  cgstRate        Float   @default(0)
+  cgstAmount      Float   @default(0)
+  sgstRate        Float   @default(0)
+  sgstAmount      Float   @default(0)
+  igstRate        Float   @default(0)
+  igstAmount      Float   @default(0)
+  cessRate        Float   @default(0)
+  cessAmount      Float   @default(0)
+  totalAmount     Float
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  item    Item?   @relation(fields: [itemId], references: [id])
+  @@map("invoice_items")
+}
+
+model Estimate {
+  id              String         @id @default(uuid())
+  businessId      String
+  estimateNumber  String
+  partyId         String?
+  partyName       String?
+  date            DateTime
+  expiryDate      DateTime?
+  subtotal        Float
+  discountAmount  Float          @default(0)
+  discountPercent Float          @default(0)
+  taxAmount       Float          @default(0)
+  totalAmount     Float
+  status          EstimateStatus @default(DRAFT)
+  notes           String?
+  terms           String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  business Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  party    Party?         @relation(fields: [partyId], references: [id])
+  items    EstimateItem[]
+  @@unique([businessId, estimateNumber])
+  @@map("estimates")
+}
+
+enum EstimateStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  CONVERTED
+  EXPIRED
+}
+
+model EstimateItem {
+  id              String  @id @default(uuid())
+  estimateId      String
+  itemId          String?
+  description     String
+  hsnCode         String?
+  quantity        Float
+  unit            String  @default("NOS")
+  rate            Float
+  discountPercent Float   @default(0)
+  discountAmount  Float   @default(0)
+  taxableAmount   Float
+  cgstRate        Float   @default(0)
+  cgstAmount      Float   @default(0)
+  sgstRate        Float   @default(0)
+  sgstAmount      Float   @default(0)
+  igstRate        Float   @default(0)
+  igstAmount      Float   @default(0)
+  cessRate        Float   @default(0)
+  cessAmount      Float   @default(0)
+  totalAmount     Float
+  estimate Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  item     Item?    @relation(fields: [itemId], references: [id])
+  @@map("estimate_items")
+}
+
+model Payment {
+  id            String        @id @default(uuid())
+  businessId    String
+  paymentNumber String
+  partyId       String
+  date          DateTime
+  amount        Float
+  paymentMethod PaymentMethod @default(CASH)
+  reference     String?
+  notes         String?
+  isAdjusted    Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  business    Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  party       Party               @relation(fields: [partyId], references: [id])
+  adjustments PaymentAdjustment[]
+  @@unique([businessId, paymentNumber])
+  @@map("payments")
+}
+
+enum PaymentMethod {
+  CASH
+  BANK
+  UPI
+  CARD
+  CHEQUE
+  NEFT
+  RTGS
+}
+
+model PaymentAdjustment {
+  id         String    @id @default(uuid())
+  paymentId  String
+  invoiceId  String?
+  purchaseId String?
+  amount     Float
+  payment    Payment   @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  invoice    Invoice?  @relation(fields: [invoiceId], references: [id])
+  purchase   Purchase? @relation(fields: [purchaseId], references: [id])
+  @@map("payment_adjustments")
+}
+
+model Expense {
+  id            String        @id @default(uuid())
+  businessId    String
+  expenseNumber String
+  date          DateTime
+  category      String
+  description   String?
+  partyId       String?
+  amount        Float
+  taxAmount     Float         @default(0)
+  totalAmount   Float
+  paymentMethod PaymentMethod @default(CASH)
+  reference     String?
+  notes         String?
+  attachmentUrl String?
+  status        ExpenseStatus @default(PAID)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  party    Party?   @relation(fields: [partyId], references: [id])
+  @@unique([businessId, expenseNumber])
+  @@map("expenses")
+}
+
+enum ExpenseStatus {
+  DRAFT
+  PAID
+  CANCELLED
+}
+
+model Receipt {
+  id            String        @id @default(uuid())
+  businessId    String
+  receiptNumber String
+  partyId       String
+  date          DateTime
+  amount        Float
+  paymentMethod PaymentMethod @default(CASH)
+  reference     String?
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  party    Party    @relation(fields: [partyId], references: [id])
+  @@unique([businessId, receiptNumber])
+  @@map("receipts")
+}
+
+model BankAccount {
+  id             String   @id @default(uuid())
+  businessId     String
+  bankName       String
+  accountName    String
+  accountNumber  String
+  ifscCode       String
+  branchName     String?
+  accountType    String?
+  openingBalance Float    @default(0)
+  currentBalance Float    @default(0)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  @@map("bank_accounts")
+}
+
+model CashAccount {
+  id             String   @id @default(uuid())
+  businessId     String
+  name           String
+  openingBalance Float    @default(0)
+  currentBalance Float    @default(0)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  @@map("cash_accounts")
+}
+
+model Transaction {
+  id            String          @id @default(uuid())
+  businessId    String
+  date          DateTime
+  type          TransactionType
+  reference     String?
+  partyId       String?
+  bankAccountId String?
+  cashAccountId String?
+  amount        Float
+  balance       Float
+  narration     String?
+  voucherType   String?
+  createdAt     DateTime        @default(now())
+  business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  party       Party?       @relation(fields: [partyId], references: [id])
+  bankAccount BankAccount? @relation(fields: [bankAccountId], references: [id])
+  cashAccount CashAccount? @relation(fields: [cashAccountId], references: [id])
+  @@map("transactions")
+}
+
+enum TransactionType {
+  RECEIPT
+  PAYMENT
+  JOURNAL
+  CONTRA
+}
+
+model JournalEntry {
+  id          String   @id @default(uuid())
+  businessId  String
+  entryNumber String
+  date        DateTime
+  description String?
+  totalDebit  Float
+  totalCredit Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  business Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  lines    JournalEntryLine[]
+  @@unique([businessId, entryNumber])
+  @@map("journal_entries")
+}
+
+model JournalEntryLine {
+  id             String  @id @default(uuid())
+  journalEntryId String
+  accountType    String
+  accountId      String
+  debit          Float   @default(0)
+  credit         Float   @default(0)
+  narration      String?
+  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  @@map("journal_entry_lines")
+}
+
+model ImportLog {
+  id              String       @id @default(uuid())
+  businessId      String?
+  importType      ImportType
+  fileName        String
+  fileSize        Float
+  recordsTotal    Int
+  recordsImported Int
+  recordsFailed   Int
+  errors          Json?
+  status          ImportStatus @default(PROCESSING)
+  startedAt       DateTime     @default(now())
+  completedAt     DateTime?
+  @@map("import_logs")
+}
+
+enum ImportType {
+  VYAPAR_JSON
+  VYAPAR_SQLITE
+  EXCEL
+  CSV
+  TALLY_XML
+}
+
+enum ImportStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+  PARTIAL
+}
+
+model Plan {
+  id          String   @id @default(uuid())
+  name        String   @unique // e.g., "Silver", "Gold", "Platinum"
+  price       Float
+  duration    Int      @default(30) // days
+  features    Json?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  subscriptions Subscription[]
+  @@map("plans")
+}
+
+model Subscription {
+  id               String           @id @default(uuid())
+  userId           String
+  planId           String
+  status           SubscriptionStatus @default(ACTIVE)
+  startDate        DateTime         @default(now())
+  endDate          DateTime
+  billingCycle     String           @default("monthly")
+  autoRenew        Boolean          @default(true)
+  paymentStatus    String           @default("paid")
+  transactionId    String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan Plan @relation(fields: [planId], references: [id])
+  @@map("subscriptions")
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+model Task {
+  id            String        @id @default(uuid())
+  businessId    String
+  title         String
+  description   String?
+  category      TaskCategory  @default(OTHER)
+  priority      Priority      @default(MEDIUM)
+  status        TaskStatus    @default(PENDING)
+  dueDate       DateTime?
+  dueTime       String?
+  remindBefore  Int           @default(15)
+  isRecurring   Boolean       @default(false)
+  recurrence    RecurrenceType?
+  recurrenceEnd DateTime?
+  partyId       String?
+  assignedTo    String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  completedAt   DateTime?
+  business      Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  party         Party?       @relation(fields: [partyId], references: [id])
+  notes         TaskNote[]
+  @@map("tasks")
+}
+
+model TaskNote {
+  id        String   @id @default(uuid())
+  taskId    String
+  content   String
+  createdAt DateTime @default(now())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  @@map("task_notes")
+}
+
+model Complaint {
+  id            String             @id @default(uuid())
+  businessId    String
+  customerName  String
+  customerPhone String?
+  customerEmail String?
+  title         String
+  description   String
+  priority      Priority           @default(MEDIUM)
+  status        ComplaintStatus   @default(OPEN)
+  partyId       String?
+  taskId        String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  resolvedAt    DateTime?
+  business      Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  party         Party?             @relation(fields: [partyId], references: [id])
+  resolutions   ComplaintResolution[]
+  timeline     ComplaintTimeline[]
+  @@map("complaints")
+}
+
+model ComplaintResolution {
+  id          String    @id @default(uuid())
+  complaintId String
+  note        String
+  resolvedBy  String?
+  createdAt   DateTime  @default(now())
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  @@map("complaint_resolutions")
+}
+
+model ComplaintTimeline {
+  id          String          @id @default(uuid())
+  complaintId String
+  fromStatus  ComplaintStatus
+  toStatus    ComplaintStatus
+  note        String?
+  createdAt   DateTime        @default(now())
+  complaint   Complaint       @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  @@map("complaint_timeline")
+}
+
+enum TaskCategory {
+  MAINTENANCE
+  INSTALLATION
+  REPAIR
+  SERVICE
+  FOLLOWUP
+  INSPECTION
+  OTHER
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+  CANCELLED
+  ON_HOLD
+}
+
+enum ComplaintStatus {
+  OPEN
+  IN_PROGRESS
+  PENDING
+  RESOLVED
+  CLOSED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum RecurrenceType {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}

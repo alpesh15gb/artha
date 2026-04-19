@@ -1,0 +1,313 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   DESIGN SYSTEM TOKENS
+   ============================================ */
+:root {
+  --font-sans: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+  --color-brand: #4f46e5;
+  --color-brand-light: #6366f1;
+  --color-surface: #ffffff;
+  --color-bg: #f8fafc;
+  --color-border: #f1f5f9;
+  --color-text: #0f172a;
+  --color-text-muted: #64748b;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 22px;
+  --radius-2xl: 32px;
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.04);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.03);
+  --shadow-lg: 0 10px 25px -3px rgb(0 0 0 / 0.04), 0 4px 6px -4px rgb(0 0 0 / 0.02);
+  --shadow-xl: 0 25px 50px -12px rgb(0 0 0 / 0.05);
+  --shadow-brand: 0 10px 40px -10px rgba(79, 70, 229, 0.4);
+  --shadow-glow: 0 0 20px rgba(79, 70, 229, 0.15);
+}
+
+/* ============================================
+   GLOBAL BASE
+   ============================================ */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-weight: 500;
+  line-height: 1.6;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-sans);
+  letter-spacing: -0.025em;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+@layer utilities {
+  /* Glass morphism */
+  .glass {
+    @apply bg-white/80 backdrop-blur-xl border border-white/60;
+  }
+  .glass-heavy {
+    @apply bg-white/95 backdrop-blur-2xl border border-white/80 shadow-xl;
+  }
+
+  /* Text gradient */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 via-purple-600 to-violet-600;
+  }
+  .text-gradient-gold {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-amber-500 to-orange-500;
+  }
+
+  /* Scrollbars */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+  .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+  .custom-scrollbar::-webkit-scrollbar-track { @apply bg-transparent; }
+  .custom-scrollbar::-webkit-scrollbar-thumb { @apply bg-slate-200 rounded-full hover:bg-slate-300; }
+
+  /* Animation utilities */
+  .hover-lift { @apply transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg; }
+  .hover-scale { @apply transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]; }
+
+  /* Status Pills */
+  .pill-success { @apply bg-emerald-50 text-emerald-700 border border-emerald-200/60 rounded-full; }
+  .pill-warning { @apply bg-amber-50 text-amber-700 border border-amber-200/60 rounded-full; }
+  .pill-danger  { @apply bg-rose-50 text-rose-700 border border-rose-200/60 rounded-full; }
+  .pill-info    { @apply bg-blue-50 text-blue-700 border border-blue-200/60 rounded-full; }
+  .pill-muted   { @apply bg-slate-50 text-slate-600 border border-slate-200/60 rounded-full; }
+  .pill-purple  { @apply bg-purple-50 text-purple-700 border border-purple-200/60 rounded-full; }
+
+  /* Surface variants */
+  .surface { @apply bg-white border border-slate-100 shadow-sm rounded-2xl; }
+  .surface-raised { @apply bg-white border border-slate-100 rounded-2xl; box-shadow: var(--shadow-lg); }
+  .surface-sunken { @apply bg-slate-50 border border-slate-100 rounded-xl; }
+}
+
+/* ============================================
+   COMPONENT CLASSES
+   ============================================ */
+@layer components {
+  /* Buttons */
+  .btn-base {
+    @apply inline-flex items-center justify-center gap-2 font-semibold text-sm rounded-xl
+           transition-all duration-150 select-none whitespace-nowrap cursor-pointer;
+  }
+  .btn-primary {
+    @apply btn-base bg-indigo-600 text-white px-5 py-2.5
+           hover:bg-indigo-500 active:bg-indigo-700
+           focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2;
+    box-shadow: var(--shadow-brand);
+  }
+  .btn-secondary {
+    @apply btn-base bg-white text-slate-700 px-5 py-2.5
+           border border-slate-200 hover:bg-slate-50 hover:border-slate-300
+           active:bg-slate-100 active:scale-[0.98]
+           focus:outline-none focus:ring-2 focus:ring-slate-300 focus:ring-offset-1;
+  }
+  .btn-ghost {
+    @apply btn-base bg-transparent text-slate-600 px-4 py-2
+           hover:bg-slate-100 active:bg-slate-200;
+  }
+  .btn-danger {
+    @apply btn-base bg-rose-600 text-white px-5 py-2.5
+           hover:bg-rose-500 active:bg-rose-700;
+    box-shadow: 0 4px 12px -2px rgb(244 63 94 / 0.3);
+  }
+
+  /* Form Inputs */
+  .input-base {
+    @apply w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5
+           text-sm font-medium text-slate-900 placeholder:text-slate-400
+           focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400
+           transition-all duration-150;
+  }
+  .input-base:disabled {
+    @apply bg-slate-50 text-slate-400 cursor-not-allowed;
+  }
+
+  /* Table base */
+  .data-table { @apply w-full text-left border-separate border-spacing-0; }
+  .data-table thead { @apply sticky top-0 z-10; }
+  .data-table th {
+    @apply px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] whitespace-nowrap border-b border-slate-100;
+    background: #ffffff;
+  }
+  .data-table td { @apply px-6 py-4 text-xs font-bold text-slate-600 transition-colors border-b border-slate-50; }
+  .data-table tbody tr {
+    @apply hover:bg-slate-50 transition-colors cursor-pointer;
+  }
+  .data-table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+
+  /* Sidebar nav item */
+  .nav-item {
+    @apply relative flex items-center gap-3.5 px-3.5 py-3 rounded-xl font-semibold text-sm
+           text-slate-500 hover:text-slate-900 hover:bg-slate-50
+           transition-all duration-150;
+  }
+  .nav-item.active {
+    @apply bg-indigo-600 text-white hover:bg-indigo-600 hover:text-white;
+    box-shadow: var(--shadow-brand);
+  }
+
+  /* Section header */
+  .section-header {
+    @apply text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em] px-3.5 mb-1.5;
+  }
+
+  /* Stat card */
+  .stat-card {
+    @apply surface-raised p-6 flex flex-col gap-4 transition-all duration-200 hover:-translate-y-0.5;
+  }
+
+  /* KPI number */
+  .kpi-value {
+    @apply text-3xl font-black text-slate-900 tracking-tight leading-none;
+  }
+  .kpi-label {
+    @apply text-xs font-semibold text-slate-400 uppercase tracking-widest;
+  }
+
+  /* Page headers */
+  .page-title { @apply text-2xl font-black text-slate-900 tracking-tight; }
+  .page-subtitle { @apply text-sm text-slate-500 font-medium mt-0.5; }
+
+  /* Action row */
+  .action-bar {
+    @apply flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6;
+  }
+
+  /* Search input */
+  .search-input {
+    @apply flex items-center gap-3 px-4 py-2.5 bg-white border border-slate-200
+           rounded-xl text-sm font-medium text-slate-500
+           focus-within:ring-2 focus-within:ring-indigo-500/25 focus-within:border-indigo-300
+           transition-all;
+  }
+  .search-input input {
+    @apply bg-transparent border-none outline-none ring-0 text-slate-900 font-medium w-full;
+  }
+
+  /* Empty states */
+  .empty-state {
+    @apply flex flex-col items-center justify-center py-20 text-center;
+  }
+  .empty-state-icon {
+    @apply w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center mb-4;
+  }
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position: 200% 0; }
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulse-ring {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(79 70 229 / 0.3); }
+  50%       { box-shadow: 0 0 0 8px rgb(79 70 229 / 0); }
+}
+
+.animate-fade-up   { animation: fadeUp 0.2s ease both; }
+.animate-scale-in  { animation: scaleIn 0.15s ease both; }
+.animate-pulse-ring { animation: pulse-ring 2s infinite; }
+
+.skeleton {
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 6px;
+}
+
+/* ============================================
+   RECHARTS OVERRIDES
+   ============================================ */
+.recharts-cartesian-axis-tick-value {
+  font-family: var(--font-sans) !important;
+  font-weight: 600 !important;
+}
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  border-radius: 12px !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: var(--shadow-xl) !important;
+}
+
+/* ============================================
+   PRINT STYLES
+   ============================================ */
+.is-printing * {
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 5mm;
+  }
+
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
+    background: white !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body > *:not(#print-root):not(script) {
+    display: none !important;
+  }
+
+  #print-root {
+    display: block !important;
+    position: relative !important;
+    width: 210mm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+
+  #print-root .flex { display: flex !important; }
+  #print-root .grid { display: grid !important; }
+  #print-root .hidden { display: none !important; }
+
+  .no-print { display: none !important; }
+}
