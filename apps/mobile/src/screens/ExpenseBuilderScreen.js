@@ -10,7 +10,8 @@ import {
   CreditCard,
   Building2,
   FileText,
-  ChevronRight
+  ChevronRight,
+  Check
 } from 'lucide-react-native';
 
 const PAYMENT_METHODS = ['CASH', 'UPI', 'BANK', 'CARD', 'CHEQUE', 'NEFT', 'RTGS'];
@@ -60,13 +61,16 @@ const ExpenseBuilderScreen = ({ onBack, onSaveSuccess }) => {
     setSaving(true);
     try {
       // Only send fields that are in createExpenseSchema — no extra keys
+      // Consistency: Enforce 1-paisa precision
+      const finalAmount = Math.round(amt * 100) / 100;
+
       const payload = {
         businessId,
         category: expenseData.category,
         description: expenseData.description || undefined,
-        amount: amt,
+        amount: finalAmount,
         taxAmount: 0,
-        totalAmount: amt,
+        totalAmount: finalAmount,
         paymentMethod: expenseData.paymentMethod,          // already uppercase
         date: new Date(expenseData.date).toISOString(),    // ISO datetime required
       };

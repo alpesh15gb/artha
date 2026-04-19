@@ -1,13 +1,40 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../lib/prisma.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
+import { IntegrityService } from '../services/IntegrityService.js';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // All routes here require Super Admin role
 router.use(authenticate);
 router.use(requireRole('ADMIN'));
+
+/**
+ * Trigger System Health Check & Auto-Healing
+ */
+router.post('/integrity/verify/:businessId', async (req, res, next) => {
+  try {
+    const { businessId } = req.params;
+    
+    const [invoiceCheck, partyCheck, stockCheck] = await Promise.all([
+      IntegrityService.verifyInvoices(businessId),
+      IntegrityService.verifyPartyBalances(businessId),
+      IntegrityService.verifyStockIntegrity(businessId),
+    ]);
+
+    res.json({
+      success: true,
+      message: 'System reconciliation completed successfully.',
+      data: {
+        invoices: invoiceCheck,
+        parties: partyCheck,
+        stock: stockCheck
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // System Stats
 router.get('/stats', async (req, res, next) => {

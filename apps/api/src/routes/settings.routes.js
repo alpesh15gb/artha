@@ -1,11 +1,10 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../lib/prisma.js';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.js';
 import { verifyBusinessOwnership } from '../middleware/businessAuth.js';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 router.use(authenticate);
 router.use(verifyBusinessOwnership);

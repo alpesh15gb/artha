@@ -1,10 +1,9 @@
 import { Router } from "express";
-import { PrismaClient } from "@prisma/client";
+import prisma from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.js";
 import { verifyBusinessOwnership } from "../middleware/businessAuth.js";
 
 const router = Router();
-const prisma = new PrismaClient();
 const INVOICE_REPORT_STATUSES = ["PAID", "PARTIAL", "SENT"];
 const PURCHASE_REPORT_STATUSES = ["PAID", "PARTIAL", "RECEIVED"];
 
@@ -1071,44 +1070,55 @@ router.get("/business/:businessId/balance-sheet", async (req, res, next) => {
       ...(toDate && { date: { lte: new Date(toDate) } }),
     };
 
-    const [parties, bankAccounts, cashAccounts, invoices, purchases, expenses] =
+    const [parties, bankAccounts, cashAccounts, salesAgg, purchaseAgg, expenseAgg] =
       await Promise.all([
         prisma.party.findMany({
           where: { businessId, isActive: true },
-          include: {
+          select: {
+            id: true,
+            balanceType: true,
+            openingBalance: true,
             invoices: {
               where: {
                 status: { in: INVOICE_REPORT_STATUSES },
                 ...dateFilter,
               },
+              select: { totalAmount: true, paidAmount: true }
             },
             purchases: {
               where: {
                 status: { in: PURCHASE_REPORT_STATUSES },
                 ...dateFilter,
               },
+              select: { totalAmount: true, paidAmount: true }
             },
-            transactions: { where: dateFilter },
+            transactions: { 
+              where: dateFilter,
+              select: { amount: true, type: true }
+            },
           },
         }),
         prisma.bankAccount.findMany({ where: { businessId } }),
         prisma.cashAccount.findMany({ where: { businessId } }),
-        prisma.invoice.findMany({
+        prisma.invoice.aggregate({
           where: {
             businessId,
             status: { in: INVOICE_REPORT_STATUSES },
             ...dateFilter,
           },
+          _sum: { subtotal: true, totalAmount: true }
         }),
-        prisma.purchase.findMany({
+        prisma.purchase.aggregate({
           where: {
             businessId,
             status: { in: PURCHASE_REPORT_STATUSES },
             ...dateFilter,
           },
+          _sum: { subtotal: true, totalAmount: true }
         }),
-        prisma.expense.findMany({
+        prisma.expense.aggregate({
           where: { businessId, status: "PAID", ...dateFilter },
+          _sum: { totalAmount: true }
         }),
       ]);
 
@@ -1149,15 +1159,9 @@ router.get("/business/:businessId/balance-sheet", async (req, res, next) => {
       0,
     );
 
-    const totalSales = invoices.reduce((sum, inv) => sum + inv.subtotal, 0);
-    const totalPurchases = purchases.reduce(
-      (sum, pur) => sum + pur.subtotal,
-      0,
-    );
-    const totalExpenses = expenses.reduce(
-      (sum, exp) => sum + exp.totalAmount,
-      0,
-    );
+    const totalSales = salesAgg._sum?.subtotal || 0;
+    const totalPurchases = purchaseAgg._sum?.subtotal || 0;
+    const totalExpenses = expenseAgg._sum?.totalAmount || 0;
     const netProfit = totalSales - totalPurchases - totalExpenses;
 
     const assets = {

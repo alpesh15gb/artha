@@ -9,89 +9,9 @@ import {
   ArrowLeft, Save, Plus, Trash2, User, Package,
   Calendar, ChevronRight, FileText, Percent, Hash
 } from 'lucide-react-native';
+import { calculateDocumentTotals, numberToWords } from '@artha/common';
 
-// ---------- helpers ----------
-const today = () => new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-
-/** Split a combined GST rate into CGST/SGST (intrastate) */
-const splitGST = (taxRate) => {
-  const half = (taxRate || 0) / 2;
-  return { cgstRate: half, sgstRate: half, igstRate: 0 };
-};
-
-/** Build the API-compliant item payload from a UI item */
-const buildApiItem = (item) => {
-  const qty = parseFloat(item.quantity) || 0;
-  const rate = parseFloat(item.rate) || 0;
-  const taxRate = parseFloat(item.taxRate) || 0;
-  const discount = parseFloat(item.discountPercent) || 0;
-
-  const taxableAmount = qty * rate * (1 - discount / 100);
-  const { cgstRate, sgstRate, igstRate } = splitGST(taxRate);
-  const cgstAmount = (taxableAmount * cgstRate) / 100;
-  const sgstAmount = (taxableAmount * sgstRate) / 100;
-  const igstAmount = (taxableAmount * igstRate) / 100;
-  const totalAmount = taxableAmount + cgstAmount + sgstAmount + igstAmount;
-
-  return {
-    itemId: item.itemId || undefined,
-    description: item.description || '',
-    hsnCode: item.hsnCode || '',
-    quantity: qty,
-    unit: item.unit || 'NOS',
-    rate,
-    discountPercent: discount,
-    discountAmount: qty * rate * discount / 100,
-    taxableAmount,
-    cgstRate,
-    cgstAmount,
-    sgstRate,
-    sgstAmount,
-    igstRate,
-    igstAmount,
-    cessRate: 0,
-    cessAmount: 0,
-    totalAmount,
-  };
-};
-
-const calcDocTotals = (items) => {
-  let subtotal = 0, cgst = 0, sgst = 0, igst = 0;
-  items.forEach(i => {
-    const api = buildApiItem(i);
-    subtotal += api.taxableAmount;
-    cgst += api.cgstAmount;
-    sgst += api.sgstAmount;
-    igst += api.igstAmount;
-  });
-  const totalTax = cgst + sgst + igst;
-  const totalAmount = subtotal + totalTax;
-  return { 
-    subtotal, 
-    cgstAmount: cgst, 
-    sgstAmount: sgst, 
-    igstAmount: igst, 
-    totalTax, 
-    totalAmount,
-    amountInWords: numberToWords(Math.round(totalAmount)) + ' Only'
-  };
-};
-
-const numberToWords = (num) => {
-  const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
-  const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-  
-  if ((num = num.toString()).length > 9) return 'Overflow';
-  const n = ('000000000' + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
-  if (!n) return '';
-  let str = '';
-  str += (n[1] != 0) ? (a[Number(n[1])] || b[n[1][0]] + ' ' + a[n[1][1]]) + 'Crore ' : '';
-  str += (n[2] != 0) ? (a[Number(n[2])] || b[n[2][0]] + ' ' + a[n[2][1]]) + 'Lakh ' : '';
-  str += (n[3] != 0) ? (a[Number(n[3])] || b[n[3][0]] + ' ' + a[n[3][1]]) + 'Thousand ' : '';
-  str += (n[4] != 0) ? (a[Number(n[4])] || b[n[4][0]] + ' ' + a[n[4][1]]) + 'Hundred ' : '';
-  str += (n[5] != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0]] + ' ' + a[n[5][1]]) : '';
-  return str.trim();
-};
+// Shared calculation engine from @artha/common is used for all totals
 
 const fmtDate = (iso) => {
   if (!iso) return '';
@@ -148,8 +68,9 @@ const DocumentBuilderScreen = ({ type = 'INVOICE', initialData = null, onBack, o
   }, []);
 
   useEffect(() => {
-    setTotals(calcDocTotals(docData.items));
-  }, [docData.items]);
+    const res = calculateDocumentTotals(docData.items, docData.discountPercent);
+    setTotals(res);
+  }, [docData.items, docData.discountPercent]);
 
   const bootstrap = async () => {
     try {
@@ -214,8 +135,7 @@ const DocumentBuilderScreen = ({ type = 'INVOICE', initialData = null, onBack, o
 
     setSaving(true);
     try {
-      const apiItems = docData.items.map(buildApiItem);
-      const t = calcDocTotals(docData.items);
+      const t = calculateDocumentTotals(docData.items, docData.discountPercent);
 
       const payload = {
         businessId,
@@ -228,7 +148,7 @@ const DocumentBuilderScreen = ({ type = 'INVOICE', initialData = null, onBack, o
         notes: docData.notes || '',
         terms: docData.terms || '',
         discountPercent: parseFloat(docData.discountPercent) || 0,
-        discountAmount: 0,
+        discountAmount: t.discountAmount,
         subtotal: t.subtotal,
         totalTax: t.totalTax,
         cgstAmount: t.cgstAmount,
@@ -237,9 +157,9 @@ const DocumentBuilderScreen = ({ type = 'INVOICE', initialData = null, onBack, o
         cessAmount: 0,
         roundOff: 0,
         totalAmount: t.totalAmount,
-        amountInWords: t.amountInWords,
+        amountInWords: numberToWords(t.totalAmount),
         paidAmount: 0,
-        items: apiItems,
+        items: t.items,
         tags: [],
         ...(type === 'INVOICE' && { invoiceType: 'TAX_INVOICE', template: 'template1' }),
       };

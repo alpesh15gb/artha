@@ -14,6 +14,7 @@ import api from '../services/api';
 import { useBusinessStore } from '../store/auth';
 import { Button, Input, Select, Card, Badge, cn } from '../components/ui';
 import toast from 'react-hot-toast';
+import { calculateDocumentTotals } from '@artha/common';
 
 const GST_OPTIONS = [
   { value: 0, label: '0%' },
@@ -99,36 +100,12 @@ function PurchaseBuilder() {
   }, [purchaseResponse, isEdit, nextNumberData]);
 
   const totals = useMemo(() => {
-    return items.reduce((acc, item) => {
-      const quantity = item.quantity || 0;
-      const rate = item.rate || 0;
-      const taxRate = item.taxRate || 0;
-      const discountPercent = item.discountPercent || 0;
-
-      let taxable = 0;
-      let taxAmount = 0;
-      let total = 0;
-
-      if (formData.isTaxInclusive) {
-        total = quantity * rate;
-        const discount = total * (discountPercent / 100);
-        total -= discount;
-        taxable = total / (1 + (taxRate / 100));
-        taxAmount = total - taxable;
-      } else {
-        const amount = quantity * rate;
-        const discount = amount * (discountPercent / 100);
-        taxable = amount - discount;
-        taxAmount = taxable * (taxRate / 100);
-        total = taxable + taxAmount;
-      }
-
-      return {
-        subtotal: acc.subtotal + taxable,
-        tax: acc.tax + taxAmount,
-        total: acc.total + total
-      };
-    }, { subtotal: 0, tax: 0, total: 0 });
+    const mappedItems = items.map(i => ({
+      ...i,
+      cgstRate: i.taxRate / 2,
+      sgstRate: i.taxRate / 2,
+    }));
+    return calculateDocumentTotals(mappedItems, 0, 0, formData.isTaxInclusive);
   }, [items, formData.isTaxInclusive]);
 
   const updateItem = (id, field, value) => {
@@ -162,31 +139,16 @@ function PurchaseBuilder() {
 
   const handleSave = () => {
     if (!formData.partyId) return toast.error('Please select a vendor');
+    const { items: processedItems, subtotal, totalAmount } = totals;
+    
     mutation.mutate({
       ...formData,
       businessId: currentBusiness.id,
       totalBoxes: formData.totalBoxes ? parseInt(formData.totalBoxes) : null,
-      subtotal: totals.subtotal,
-      totalAmount: totals.total,
-      balanceDue: totals.total,
-      items: items.map(i => {
-        const taxableAmount = (i.quantity || 0) * (i.rate || 0) * (1 - (i.discountPercent || 0) / 100);
-        const halfTax = i.taxRate / 2;
-        return {
-           itemId: i.itemId || null,
-           description: i.description,
-           hsnCode: i.hsnCode,
-           quantity: i.quantity,
-           unit: i.unit,
-           rate: i.rate,
-           taxableAmount,
-           cgstRate: halfTax,
-           sgstRate: halfTax,
-           cgstAmount: taxableAmount * (halfTax / 100),
-           sgstAmount: taxableAmount * (halfTax / 100),
-           totalAmount: taxableAmount * (1 + i.taxRate / 100)
-        };
-      })
+      subtotal,
+      totalAmount,
+      balanceDue: totalAmount,
+      items: processedItems
     });
   };
 

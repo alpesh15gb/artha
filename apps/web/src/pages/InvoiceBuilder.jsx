@@ -15,7 +15,7 @@ import api from '../services/api';
 import { useBusinessStore } from '../store/auth';
 import { Button, Input, Select, Card, Badge, Modal, Portal, cn } from '../components/ui';
 import toast from 'react-hot-toast';
-import { numberToWords } from '../utils/numberToWords';
+import { calculateDocumentTotals, numberToWords } from '@artha/common';
 import { InvoiceTemplate1 } from '../components/invoices/InvoiceTemplate1';
 
 const GST_OPTIONS = [
@@ -118,33 +118,13 @@ function InvoiceBuilder() {
 
   // ── Calculations ───────────────────────────
   const totals = useMemo(() => {
-    return items.reduce((acc, item) => {
-      const q = item.quantity || 0;
-      const r = item.rate || 0;
-      const t = item.taxRate || 0;
-      const d = item.discountPercent || 0;
-
-      let taxable, tax, total;
-      if (formData.isTaxInclusive) {
-        total = q * r;
-        const disc = total * (d / 100);
-        total -= disc;
-        taxable = total / (1 + (t / 100));
-        tax = total - taxable;
-      } else {
-        const gross = q * r;
-        const disc = gross * (d / 100);
-        taxable = gross - disc;
-        tax = taxable * (t / 100);
-        total = taxable + tax;
-      }
-
-      return {
-        subtotal: acc.subtotal + taxable,
-        tax: acc.tax + tax,
-        total: acc.total + total
-      };
-    }, { subtotal: 0, tax: 0, total: 0 });
+    // Map taxRate to cgst/sgst rates for the common engine
+    const mappedItems = items.map(i => ({
+      ...i,
+      cgstRate: i.taxRate / 2,
+      sgstRate: i.taxRate / 2,
+    }));
+    return calculateDocumentTotals(mappedItems, 0, 0, formData.isTaxInclusive);
   }, [items, formData.isTaxInclusive]);
 
   // ── API Handlers ───────────────────────────
@@ -161,41 +141,22 @@ function InvoiceBuilder() {
   const handleSave = (status = 'DRAFT') => {
     if (!formData.partyId) return toast.error('Check entity identity');
     
-    const itemsPayload = items.map(i => {
-      const q = i.quantity || 0;
-      const r = i.rate || 0;
-      const dp = i.discountPercent || 0;
-      const tr = i.taxRate || 0;
-
-      let taxable;
-      if (formData.isTaxInclusive) taxable = (q * r * (1 - dp/100)) / (1 + tr/100);
-      else taxable = q * r * (1 - dp/100);
-
-      const hTax = tr / 2;
-      return {
-        ...i,
-        taxableAmount: taxable,
-        cgstRate: hTax, sgstRate: hTax, igstRate: 0,
-        cgstAmount: taxable * (hTax / 100),
-        sgstAmount: taxable * (hTax / 100),
-        igstAmount: 0,
-        totalAmount: taxable * (1 + tr/100)
-      };
-    });
+    // Use the totals calculated from the shared engine
+    const { items: processedItems, subtotal, totalTax, cgstAmount, sgstAmount, totalAmount } = totals;
 
     mutation.mutate({
       ...formData,
       status,
       businessId: currentBusiness.id,
       totalBoxes: formData.totalBoxes ? parseInt(formData.totalBoxes) : null,
-      subtotal: totals.subtotal,
-      totalTax: totals.tax,
-      cgstAmount: totals.tax / 2,
-      sgstAmount: totals.tax / 2,
-      totalAmount: totals.total,
-      balanceDue: status === 'PAID' ? 0 : totals.total,
-      amountInWords: numberToWords(Math.round(totals.total)),
-      items: itemsPayload
+      subtotal,
+      totalTax,
+      cgstAmount,
+      sgstAmount,
+      totalAmount,
+      balanceDue: status === 'PAID' ? 0 : totalAmount,
+      amountInWords: numberToWords(totalAmount),
+      items: processedItems
     });
   };
 

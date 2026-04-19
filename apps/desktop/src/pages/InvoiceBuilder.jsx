@@ -15,7 +15,7 @@ import api from '../services/api';
 import { useBusinessStore } from '../store/auth';
 import { Button, Input, Select, Card, Badge, Modal, Portal, cn } from '../components/ui';
 import toast from 'react-hot-toast';
-import { numberToWords } from '../utils/numberToWords';
+import { calculateDocumentTotals, numberToWords } from '@artha/common';
 import { InvoiceTemplate1 } from '../components/invoices/InvoiceTemplate1';
 
 const GST_OPTIONS = [
@@ -126,36 +126,12 @@ function InvoiceBuilder() {
 
   // Calculations
   const totals = useMemo(() => {
-    return items.reduce((acc, item) => {
-      const quantity = item.quantity || 0;
-      const rate = item.rate || 0;
-      const taxRate = item.taxRate || 0;
-      const discountPercent = item.discountPercent || 0;
-
-      let taxable = 0;
-      let taxAmount = 0;
-      let total = 0;
-
-      if (formData.isTaxInclusive) {
-        total = quantity * rate;
-        const discount = total * (discountPercent / 100);
-        total -= discount;
-        taxable = total / (1 + (taxRate / 100));
-        taxAmount = total - taxable;
-      } else {
-        const amount = quantity * rate;
-        const discount = amount * (discountPercent / 100);
-        taxable = amount - discount;
-        taxAmount = taxable * (taxRate / 100);
-        total = taxable + taxAmount;
-      }
-      
-      return {
-        subtotal: acc.subtotal + taxable,
-        tax: acc.tax + taxAmount,
-        total: acc.total + total
-      };
-    }, { subtotal: 0, tax: 0, total: 0 });
+    const mappedItems = items.map(i => ({
+      ...i,
+      cgstRate: i.taxRate / 2,
+      sgstRate: i.taxRate / 2,
+    }));
+    return calculateDocumentTotals(mappedItems, 0, 0, formData.isTaxInclusive);
   }, [items, formData.isTaxInclusive]);
 
   const updateItem = (id, field, value) => {
@@ -189,39 +165,22 @@ function InvoiceBuilder() {
 
   const handleSave = (status = 'DRAFT') => {
     if (!formData.partyId) return toast.error('Please select a party');
+    const { items: processedItems, subtotal, totalTax, cgstAmount, sgstAmount, totalAmount } = totals;
+
     const payload = {
       ...formData,
       status,
       businessId: currentBusiness?.id,
       totalBoxes: formData.totalBoxes ? parseInt(formData.totalBoxes) : null,
       billingAddress: formData.billingAddress || selectedParty?.address || '',
-      subtotal: totals.subtotal,
-      cgstAmount: totals.tax / 2,
-      sgstAmount: totals.tax / 2,
-      totalAmount: totals.total,
-      balanceDue: totals.total,
-      amountInWords: numberToWords(Math.round(totals.total)),
-      items: items.map(i => {
-        let taxableAmount = (i.quantity || 0) * (i.rate || 0) * (1 - (i.discountPercent || 0) / 100);
-        if (formData.isTaxInclusive) {
-          taxableAmount = taxableAmount / (1 + (i.taxRate / 100));
-        }
-        const halfTax = i.taxRate / 2;
-        return {
-          itemId: i.itemId || null,
-          description: i.description,
-          hsnCode: i.hsnCode,
-          quantity: i.quantity,
-          unit: i.unit,
-          rate: i.rate,
-          taxableAmount,
-          cgstRate: halfTax,
-          sgstRate: halfTax,
-          cgstAmount: taxableAmount * halfTax / 100,
-          sgstAmount: taxableAmount * halfTax / 100,
-          totalAmount: taxableAmount * (1 + i.taxRate / 100)
-        };
-      })
+      subtotal,
+      totalTax,
+      cgstAmount,
+      sgstAmount,
+      totalAmount,
+      balanceDue: totalAmount,
+      amountInWords: numberToWords(totalAmount),
+      items: processedItems
     };
     mutation.mutate(payload);
   };

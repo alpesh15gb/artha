@@ -251,4 +251,46 @@ router.get('/me', async (req, res, next) => {
   }
 });
 
+const updateProfileSchema = z.object({
+  name: z.string().min(1).optional(),
+  phone: z.string().optional(),
+});
+
+router.put('/profile', async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ success: false, message: 'No token' });
+    }
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const data = updateProfileSchema.parse(req.body);
+
+    const user = await prisma.user.update({
+      where: { id: decoded.userId },
+      data: {
+        ...(data.name && { name: data.name }),
+        ...(data.phone && { phone: data.phone }),
+      },
+    });
+
+    res.json({
+      success: true,
+      data: {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          role: user.role,
+        }
+      }
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

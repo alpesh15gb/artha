@@ -14,7 +14,7 @@ import api from '../services/api';
 import { useBusinessStore } from '../store/auth';
 import { Button, Input, Select, Card, Badge, Modal, Portal, cn } from '../components/ui';
 import toast from 'react-hot-toast';
-import { numberToWords } from '../utils/numberToWords';
+import { calculateDocumentTotals, numberToWords } from '@artha/common';
 import { EstimateTemplateAlphesh } from '../components/invoices/EstimateTemplateAlphesh';
 
 const GST_OPTIONS = [
@@ -99,17 +99,12 @@ function EstimateBuilder() {
   }, [estimateResponse, isEdit, nextNumberData]);
 
   const totals = useMemo(() => {
-    return items.reduce((acc, item) => {
-      const amount = (item.quantity || 0) * (item.rate || 0);
-      const discount = amount * ((item.discountPercent || 0) / 100);
-      const taxable = amount - discount;
-      const taxAmount = taxable * ((item.taxRate || 0) / 100);
-      return {
-        subtotal: acc.subtotal + taxable,
-        tax: acc.tax + taxAmount,
-        total: acc.total + taxable + taxAmount
-      };
-    }, { subtotal: 0, tax: 0, total: 0 });
+    const mappedItems = items.map(i => ({
+      ...i,
+      cgstRate: i.taxRate / 2,
+      sgstRate: i.taxRate / 2,
+    }));
+    return calculateDocumentTotals(mappedItems, 0, 0, false); // Desktop estimate currently doesn't have isTaxInclusive in state but should match logic
   }, [items]);
 
   const updateItem = (id, field, value) => {
@@ -143,32 +138,16 @@ function EstimateBuilder() {
 
   const handleSave = (status = 'DRAFT') => {
     if (!formData.partyId) return toast.error('Please select a party');
+    const { items: processedItems, subtotal, totalAmount } = totals;
     const payload = {
       ...formData,
       status,
       businessId: currentBusiness.id,
       address: formData.address || selectedParty?.address || '',
-      subtotal: totals.subtotal,
-      totalAmount: totals.total,
-      amountInWords: numberToWords(Math.round(totals.total)),
-      items: items.map(i => {
-        const taxableAmount = (i.quantity || 0) * (i.rate || 0) * (1 - (i.discountPercent || 0) / 100);
-        const halfTax = i.taxRate / 2;
-        return {
-          itemId: i.itemId || null,
-          description: i.description,
-          hsnCode: i.hsnCode,
-          quantity: i.quantity,
-          unit: i.unit,
-          rate: i.rate,
-          taxableAmount,
-          cgstRate: halfTax,
-          sgstRate: halfTax,
-          cgstAmount: taxableAmount * (halfTax / 100),
-          sgstAmount: taxableAmount * (halfTax / 100),
-          totalAmount: taxableAmount * (1 + i.taxRate / 100)
-        };
-      })
+      subtotal,
+      totalAmount,
+      amountInWords: numberToWords(totalAmount),
+      items: processedItems
     };
     mutation.mutate(payload);
   };

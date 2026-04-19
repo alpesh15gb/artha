@@ -40,14 +40,15 @@ const UserProfileScreen = ({ onBack }) => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      // In a real API, this would be a PUT /auth/profile
-      // For now we'll simulate success since the logic is there
-      setTimeout(() => {
-        Alert.alert('Success', 'Profile updated successfully!');
-        setSaving(false);
-      }, 1000);
+      await arthaService.client.put('/auth/profile', {
+        name: userData.name,
+        phone: userData.phone
+      });
+      Alert.alert('✅ Success', 'Profile updated successfully!');
     } catch (error) {
-      Alert.alert('Error', 'Failed to update profile.');
+      console.error('Profile update failed:', error.response?.data || error);
+      Alert.alert('Error', error.response?.data?.message || 'Failed to update profile.');
+    } finally {
       setSaving(false);
     }
   };

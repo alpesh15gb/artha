@@ -3,6 +3,7 @@ import { z } from "zod";
 import prisma from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.js";
 import { verifyBusinessOwnership } from "../middleware/businessAuth.js";
+import { calculateDocumentTotals } from "../../../../packages/common/src/index.js";
 
 const router = Router();
 
@@ -161,7 +162,25 @@ router.post("/", async (req, res, next) => {
   try {
     const data = createInvoiceSchema.parse(req.body);
 
+    // 1. Recalculate and Verify
+    const calculated = calculateDocumentTotals(data.items, data.discountPercent, data.roundOff);
+    
+    // Allow for tiny rounding differences (0.05 paisa), but otherwise enforce exactness
+    if (Math.abs(calculated.totalAmount - data.totalAmount) > 0.05) {
+      return res.status(400).json({
+        success: false,
+        message: "Financial validation failed: Total amount mismatch.",
+        details: { expected: calculated.totalAmount, received: data.totalAmount }
+      });
+    }
+
     const result = await prisma.$transaction(async (tx) => {
+      // 2. Uniqueness Check
+      const existing = await tx.invoice.findFirst({
+        where: { businessId: data.businessId, invoiceNumber: data.invoiceNumber }
+      });
+      if (existing) throw new Error(`Invoice number ${data.invoiceNumber} already exists for this business.`);
+
       const invoice = await tx.invoice.create({
         data: {
           businessId: data.businessId,

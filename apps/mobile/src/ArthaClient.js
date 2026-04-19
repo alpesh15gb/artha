@@ -1,4 +1,5 @@
 import axios from 'axios';
+import axiosRetry from 'axios-retry';
 
 // Use the LAN IP discovered to connect Android/iOS to the local server
 const API_BASE_URL = 'http://192.168.0.201:3001/api';
@@ -10,7 +11,45 @@ class ArthaService {
       headers: {
         'Content-Type': 'application/json',
       },
+      timeout: 10000, // 10s timeout
     });
+
+    // Self-Healing: Automatic Retry for network errors or idempotent 5xx errors
+    axiosRetry(this.client, {
+      retries: 3,
+      retryDelay: axiosRetry.exponentialDelay,
+      retryCondition: (error) => {
+        return axiosRetry.isNetworkOrIdempotentRequestError(error) || error.response?.status >= 500;
+      },
+      onRetry: (retryCount, error, requestConfig) => {
+        console.warn(`[API] Retry attempt #${retryCount} for ${requestConfig.url}. Error: ${error.message}`);
+      }
+    });
+
+    // Centralized Error Handling & Meaningful Logs
+    this.client.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        const errorData = {
+          message: error.response?.data?.message || error.message,
+          code: error.response?.status || 'NETWORK_ERROR',
+          url: error.config?.url,
+          timestamp: new Date().toISOString()
+        };
+
+        console.error(`[API ERROR] ${errorData.code} | ${errorData.url} | ${errorData.message}`);
+        
+        if (this.errorListener) {
+          this.errorListener(errorData);
+        }
+        
+        return Promise.reject(error);
+      }
+    );
+  }
+
+  setErrorListener(listener) {
+    this.errorListener = listener;
   }
 
   setAuthToken(token) {
@@ -25,7 +64,6 @@ class ArthaService {
   // Auth
   async login(email, password) {
     const res = await this.client.post('/auth/login', { email, password });
-    // The API returns { success: true, data: { token: '...', user: {...} } }
     if (res.data.data?.token) {
       this.setAuthToken(res.data.data.token);
     }
@@ -40,7 +78,6 @@ class ArthaService {
 
   // Invoices
   async getInvoices(businessId) {
-    // If businessId is 'all', we might need to adjust or keep it
     const res = await this.client.get(`/invoices/business/${businessId}`);
     return res.data;
   }

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { SafeAreaView, Text, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { SafeAreaView, Text, TouchableOpacity, Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { TrendingUp, Settings } from 'lucide-react-native';
 import { ThemeProvider } from './src/ThemeContext';
@@ -28,6 +28,17 @@ export default function App() {
   const [docBuilderType, setDocBuilderType] = useState('INVOICE');
   const [selectedPartyId, setSelectedPartyId] = useState(null);
   const [selectedItemId, setSelectedItemId] = useState(null);
+
+  useEffect(() => {
+    // Centralized Error Handling: Alert user on critical failures
+    arthaService.setErrorListener((err) => {
+      Alert.alert(
+        '🚨 System Alert',
+        `An error occurred (${err.code}).\n\n${err.message}\n\nOur system is attempting to heal this automatically where possible.`,
+        [{ text: 'OK' }]
+      );
+    });
+  }, []);
 
   const handleLogout = () => {
     setIsAuthenticated(false);

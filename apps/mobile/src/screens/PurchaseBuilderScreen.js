@@ -78,14 +78,22 @@ const PurchaseBuilderScreen = ({ onBack, onSaveSuccess }) => {
       const bizRes = await arthaService.client.get('/businesses');
       const bizId = bizRes.data.data?.[0]?.id;
       
+      // Consistency: Enforce 1-paisa precision
+      const finalAmount = Math.round(docData.totalAmount * 100) / 100;
+
       const payload = {
         businessId: bizId,
         partyId: docData.partyId,
         purchaseNumber: docData.purchaseNumber,
         date: new Date(docData.date).toISOString(),
-        items: docData.items.length > 0 ? docData.items : [{ name: 'Manual Purchase Entry', quantity: 1, rate: docData.totalAmount, amount: docData.totalAmount }],
-        subtotal: docData.totalAmount,
-        totalAmount: docData.totalAmount,
+        items: docData.items.length > 0 ? docData.items : [{ 
+          name: 'Manual Purchase Entry', 
+          quantity: 1, 
+          rate: finalAmount, 
+          amount: finalAmount 
+        }],
+        subtotal: finalAmount,
+        totalAmount: finalAmount,
       };
 
       await arthaService.client.post('/purchases', payload);
