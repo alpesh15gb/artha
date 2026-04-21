@@ -42,6 +42,10 @@ const prisma = new PrismaClient();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(fileUpload({
+  useTempFiles: true,
+  tempFileDir: path.join(process.cwd(), "tmp")
+}));
 
 // Universal Debugger & JSON Fixer
 app.use((req, res, next) => {
