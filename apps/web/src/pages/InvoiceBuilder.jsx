@@ -228,8 +228,8 @@ function InvoiceBuilder() {
             {/* Customer Details */}
             <section className="lg:col-span-2 surface p-6 space-y-5">
               <div className="flex items-center justify-between">
-                <h2 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                  <User className="w-3 h-3 text-indigo-500" /> Customer Information
+                <h2 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em] flex items-center gap-2">
+                  <div className="w-1.5 h-4 bg-indigo-600 rounded-full" /> Customer Information
                 </h2>
                 <div className="flex gap-4">
                   <select
@@ -289,8 +289,8 @@ function InvoiceBuilder() {
 
             {/* Date & Ref Block */}
             <section className="surface p-6 space-y-5">
-              <h2 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                <Calendar className="w-3 h-3 text-amber-500" /> Date & Logic
+              <h2 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em] flex items-center gap-2">
+                <div className="w-1.5 h-4 bg-amber-500 rounded-full" /> Date & Logic
               </h2>
 
               <div className="space-y-4">
@@ -332,7 +332,9 @@ function InvoiceBuilder() {
           {/* Items Table */}
           <section className="surface overflow-hidden">
             <div className="px-6 py-4 flex items-center justify-between border-b border-slate-100 bg-slate-50/50">
-                <h2 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Line Items</h2>
+                 <h2 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em] flex items-center gap-2">
+                   <div className="w-1.5 h-4 bg-indigo-600 rounded-full" /> Line Items
+                 </h2>
                 <button onClick={() => setItems([...items, { id: Math.random().toString(), itemId: '', description: '', hsnCode: '', quantity: 1, unit: 'NOS', rate: 0, taxRate: 18, discountPercent: 0 }])} className="btn-secondary !py-1.5 !px-3 !text-[10px] !rounded-lg border-indigo-100 text-indigo-600">
                   <Plus className="w-3 h-3" /> ADD ITEM
                 </button>
@@ -449,9 +451,9 @@ function InvoiceBuilder() {
 
           {/* Transport & Shipping */}
           <section className="surface p-6 space-y-5">
-            <h2 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-              <Truck className="w-3 h-3 text-indigo-500" /> Logistics & Transport
-            </h2>
+             <h2 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em] flex items-center gap-2">
+               <div className="w-1.5 h-4 bg-indigo-600 rounded-full" /> Logistics & Transport
+             </h2>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-5">
                <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Mode</label>
@@ -489,25 +491,28 @@ function InvoiceBuilder() {
                 </div>
              </section>
 
-             <section className="surface p-8 bg-slate-900 text-white relative flex flex-col justify-center overflow-hidden">
-                <Calculator className="absolute -bottom-6 -right-6 w-40 h-40 text-white/5 rotate-12" />
-                <div className="relative z-10 space-y-5">
-                   <div className="flex justify-between items-center text-slate-400">
-                     <span className="text-[10px] font-black uppercase tracking-[0.2em]">Net Taxable Value</span>
-                     <span className="text-lg font-bold text-white">₹{(totals?.subtotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                   </div>
-                   <div className="flex justify-between items-center text-slate-400">
-                     <span className="text-[10px] font-black uppercase tracking-[0.2em]">Aggregate GST</span>
-                     <span className="text-lg font-bold text-indigo-400">₹{(totals?.totalTax || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                   </div>
-                   <div className="h-px bg-white/10 my-2" />
-                   <div>
-                     <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-1">Total Payable Amount</p>
-                     <h2 className="text-5xl font-black tracking-tighter">₹{(totals?.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</h2>
-                   </div>
-                   <p className="text-[10px] font-bold text-slate-500 italic mt-3 uppercase">Rupees {numberToWords(Math.round(totals?.totalAmount || 0))} ONLY</p>
-                </div>
-             </section>
+              <section className="surface p-8 bg-[#0f172a] text-white relative flex flex-col justify-center overflow-hidden shadow-2xl">
+                 <Calculator className="absolute -bottom-6 -right-6 w-40 h-40 text-white/5 rotate-12" />
+                 <div className="relative z-10 space-y-5">
+                    <div className="flex justify-between items-center text-slate-400">
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em]">Net Taxable Value</span>
+                      <span className="text-xl font-black text-white font-header">₹{(totals?.subtotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-400">
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em]">Aggregate GST</span>
+                      <span className="text-xl font-black text-indigo-400 font-header">₹{(totals?.totalTax || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="h-px bg-white/10 my-2" />
+                    <div className="py-2">
+                      <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-2 leading-none">Total Payable Amount</p>
+                      <h2 className="text-6xl font-black tracking-tighter text-white font-header leading-none">
+                        ₹{(totals?.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 0 })}
+                        <span className="text-2xl opacity-60 ml-1">.00</span>
+                      </h2>
+                    </div>
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-4">Rupees {numberToWords(Math.round(totals?.totalAmount || 0))} ONLY</p>
+                 </div>
+              </section>
           </div>
         </div>
       </main>
