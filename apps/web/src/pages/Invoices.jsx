@@ -218,8 +218,8 @@ function Invoices() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.05 }}
-            className="bg-white rounded-2xl border border-slate-100 p-5 flex items-center gap-4"
-            style={{ boxShadow: "0 2px 12px -2px rgb(0 0 0 / 0.05)" }}
+            className="bg-white rounded-2xl border border-slate-200/60 p-5 flex items-center gap-4 transition-all hover:-translate-y-0.5"
+            style={{ boxShadow: "0 8px 30px rgba(0, 0, 0, 0.04)" }}
           >
             <div
               className={cn(
@@ -230,10 +230,10 @@ function Invoices() {
               <m.icon className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
                 {m.label}
               </p>
-              <p className="text-xl font-black text-slate-900 leading-tight">
+              <p className="text-xl font-black text-slate-900 leading-tight font-header">
                 ₹{m.value.toLocaleString("en-IN")}
               </p>
             </div>

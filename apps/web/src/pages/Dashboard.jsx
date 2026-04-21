@@ -55,8 +55,8 @@ function StatCard({ title, value, sub, icon: Icon, color, trend, trendValue, del
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-      className="bg-white rounded-2xl border border-slate-100 p-6 flex flex-col gap-4 hover:-translate-y-0.5 transition-all duration-200"
-      style={{ boxShadow: '0 4px 20px -4px rgb(0 0 0 / 0.06)' }}
+      className="bg-white rounded-2xl border border-slate-200/60 p-6 flex flex-col gap-4 hover:-translate-y-0.5 transition-all duration-300"
+      style={{ boxShadow: '0 8px 30px rgba(0, 0, 0, 0.04)' }}
     >
       <div className="flex items-start justify-between">
         <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center', c.ring)}>
@@ -73,11 +73,11 @@ function StatCard({ title, value, sub, icon: Icon, color, trend, trendValue, del
         )}
       </div>
       <div>
-        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-1">{title}</p>
-        <p className="text-2xl font-black text-slate-900 tracking-tight leading-none">
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1.5">{title}</p>
+        <p className="text-2xl font-black text-slate-900 tracking-tight leading-none font-header">
           {typeof value === 'number' ? `₹${value.toLocaleString('en-IN')}` : value}
         </p>
-        {sub && <p className="text-xs text-slate-400 font-medium mt-1.5">{sub}</p>}
+        {sub && <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-2 opacity-70">{sub}</p>}
       </div>
     </motion.div>
   );
@@ -275,7 +275,7 @@ function Dashboard() {
                   dataKey="name"
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 600, fontFamily: 'Plus Jakarta Sans' }}
+                  tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 800, fontFamily: 'Outfit' }}
                   dy={10}
                 />
                 <YAxis hide />

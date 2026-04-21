@@ -190,7 +190,7 @@ function NavItem({ item, isCollapsed }) {
         )}
       />
       {!isCollapsed && (
-        <span className="text-xs font-black uppercase tracking-widest leading-none">
+        <span className="text-[11px] font-black uppercase tracking-widest leading-none">
           {item.label}
         </span>
       )}
@@ -345,7 +345,7 @@ function Layout({ children }) {
           {NAV_GROUPS.map((group) => (
             <div key={group.label} className="space-y-3">
               {!isCollapsed && (
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em] px-4">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em] px-4">
                   {group.label}
                 </p>
               )}
