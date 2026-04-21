@@ -64,13 +64,28 @@ router.post("/vyapar", async (req, res, next) => {
       },
     });
 
-    res.json({
-      success: true,
-      message: "File uploaded, processing started",
-      data: { importId: importLog.id },
-    });
-
-    processImport(filePath, businessId, importLog.id).catch(console.error);
+    // Process import SYNCHRONOUSLY and return results
+    try {
+      console.log("Starting import for file:", file.name, "at", filePath);
+      const result = await processImport(filePath, businessId, importLog.id);
+      console.log("Import completed successfully:", result);
+      res.json({
+        success: true,
+        message: "Import completed",
+        data: { importId: importLog.id, result }
+      });
+    } catch (err) {
+      console.error("Import error:", err.message, err.stack);
+      await prisma.importLog.update({
+        where: { id: importLog.id },
+        data: { status: "FAILED", notes: err.message }
+      }).catch(() => {});
+      res.status(500).json({
+        success: false,
+        message: err.message,
+        data: { importId: importLog.id }
+      });
+    }
   } catch (error) {
     next(error);
   }
@@ -108,8 +123,14 @@ async function processImport(filePath, businessId, importLogId) {
           throw new Error("No .vyp file found in ZIP");
         }
       } catch (zipError) {
-        db = new Database(filePath, { readonly: true });
-        await importFromSqlite(db, businessId, importLogId);
+        console.log("ZIP extract failed:", zipError.message, "- trying as direct SQLite");
+        try {
+          db = new Database(filePath, { readonly: true });
+          await importFromSqlite(db, businessId, importLogId);
+        } catch (dbError) {
+          console.log("Direct SQLite open failed:", dbError.message);
+          throw dbError;
+        }
       }
     } else if (ext === ".db") {
       db = new Database(filePath, { readonly: true });
@@ -145,20 +166,80 @@ async function processImport(filePath, businessId, importLogId) {
   }
 }
 
+router.post("/purge", async (req, res, next) => {
+  try {
+    const { businessId } = req.body;
+
+    if (!businessId) {
+      return res.status(400).json({ success: false, message: "Business ID required" });
+    }
+
+    await prisma.$transaction([
+      prisma.invoiceItem.deleteMany({ where: { invoice: { businessId } } }),
+      prisma.purchaseItem.deleteMany({ where: { purchase: { businessId } } }),
+      prisma.invoice.deleteMany({ where: { businessId } }),
+      prisma.purchase.deleteMany({ where: { businessId } }),
+      prisma.estimateItem.deleteMany({ where: { estimate: { businessId } } }),
+      prisma.estimate.deleteMany({ where: { businessId } }),
+      prisma.cashAccount.deleteMany({ where: { businessId } }),
+      prisma.bankAccount.deleteMany({ where: { businessId } }),
+      prisma.party.deleteMany({ where: { businessId } }),
+      prisma.item.deleteMany({ where: { businessId } }),
+    ]);
+
+    res.json({ success: true, message: "Workspace purged successfully" });
+  } catch (error) {
+    next(error);
+  }
+});
+
 async function importFromSqlite(db, businessId, importLogId) {
-  console.log("Importing from Vyapar SQLite - Full Import...");
+  console.log("=== IMPORT START: businessId =", businessId, "importLogId =", importLogId);
+  console.log("Importing from Vyapar SQLite - Enhanced Import...");
   let imported = 0;
   let failed = 0;
 
+  // Write debug to import log
+  await prisma.importLog.update({
+    where: { id: importLogId },
+    data: { status: "PROCESSING", notes: "Starting import..." }
+  }).catch(() => {});
+
   try {
+    console.log("Reading VYP tables...");
     const items = db.prepare("SELECT * FROM kb_items").all();
     const parties = db.prepare("SELECT * FROM kb_names").all();
     const transactions = db.prepare("SELECT * FROM kb_transactions").all();
     const lineItems = db.prepare("SELECT * FROM kb_lineitems").all();
     const taxCodes = db.prepare("SELECT * FROM kb_tax_code").all();
+    console.log(`Items: ${items.length}, Parties: ${parties.length}, Transactions: ${transactions.length}, LineItems: ${lineItems.length}`);
+    
+    // Update with counts
+    await prisma.importLog.update({
+      where: { id: importLogId },
+      data: { recordsTotal: items.length + parties.length + transactions.length, notes: `Found ${items.length} items, ${parties.length} parties, ${transactions.length} transactions` }
+    }).catch(() => {});
+    console.log("All tables read, building tax map...");
+    
+    // Debug: Check line item column names
+    const lineItemSample = lineItems[0] || {};
+    console.log("Line item keys:", Object.keys(lineItemSample));
+    console.log("Line item sample:", lineItemSample);
+    
+    // Bank & Payment Metadata
+    let paymentTypes = [];
+    try {
+      paymentTypes = db.prepare("SELECT * FROM kb_paymentTypes").all();
+      console.log("Payment types:", paymentTypes.length);
+    } catch (err) {
+      console.log("kb_paymentTypes failed, trying kb_banks or other_accounts...");
+    }
+
+    const paymentMappings = db.prepare("SELECT * FROM txn_payment_mapping").all();
+    const txnLinks = db.prepare("SELECT * FROM kb_txn_links").all();
 
     console.log(
-      `Read: ${items.length} items, ${parties.length} parties, ${transactions.length} txns, ${lineItems.length} line items`,
+      `Read: ${items.length} items, ${parties.length} parties, ${transactions.length} txns, ${lineItems.length} line items, ${paymentTypes.length} p-types`,
     );
 
     const taxRateMap = new Map();
@@ -166,17 +247,55 @@ async function importFromSqlite(db, businessId, importLogId) {
       taxRateMap.set(tax.tax_code_id, safeFloat(tax.tax_rate));
     }
 
+    // 0. Import BANK/CASH ACCOUNTS
+    const bankMap = new Map();
+    const cashMap = new Map();
+
+    for (const pt of paymentTypes) {
+      try {
+        if (pt.paymentType_type === 'CASH') {
+          const cashAcc = await prisma.cashAccount.create({
+            data: {
+              businessId,
+              name: pt.paymentType_name || "Main Cash",
+              openingBalance: safeFloat(pt.paymentType_opening_balance),
+              currentBalance: safeFloat(pt.paymentType_opening_balance),
+            }
+          });
+          cashMap.set(pt.paymentType_id, cashAcc.id);
+        } else if (pt.paymentType_type === 'BANK' || pt.paymentType_type === 'CHEQUE') {
+          const bankAcc = await prisma.bankAccount.create({
+            data: {
+              businessId,
+              bankName: pt.paymentType_name || pt.paymentType_bankName || "Business Bank",
+              accountName: pt.pt_bank_account_holder_name || pt.paymentType_name || "Main",
+              accountNumber: pt.paymentType_accountNumber || "0000",
+              ifscCode: pt.pt_bank_ifsc_code || "UNKNOWN",
+              branchName: "",
+              openingBalance: safeFloat(pt.paymentType_opening_balance),
+              currentBalance: safeFloat(pt.paymentType_opening_balance),
+            }
+          });
+          bankMap.set(pt.paymentType_id, bankAcc.id);
+        }
+      } catch (e) {
+        console.error("Account Import Failed:", e.message);
+      }
+    }
+
     // 1. Import ITEMS
     const itemMap = new Map();
+    const itemNameMap = new Map();
     for (const item of items) {
       try {
-        const taxRate = item.item_tax_id
-          ? taxRateMap.get(item.item_tax_id) || 18
-          : 18;
+        const taxRate = item.item_tax_id ? taxRateMap.get(item.item_tax_id) || 18 : 18;
+        // Detect service: item_type=2 OR (no stock tracking AND no purchase price)
+        const isService = item.item_type === 2 || (safeFloat(item.item_purchase_unit_price) === 0 && safeFloat(item.item_stock_quantity) === 0);
+        
         const newItem = await prisma.item.create({
           data: {
             businessId,
-            name: item.item_name || "",
+            name: item.item_name || "Unnamed Item",
             sku: item.item_code || "",
             hsnCode: item.item_hsn_sac_code || "",
             description: item.item_description || "",
@@ -186,184 +305,316 @@ async function importFromSqlite(db, businessId, importLogId) {
             mrp: safeFloat(item.item_mrp),
             taxRate,
             currentStock: safeFloat(item.item_stock_quantity),
-            isService: item.item_type === 2,
+            isService,
             isActive: item.item_is_active !== 0,
           },
         });
-        itemMap.set(item.item_id, newItem.id);
+        itemMap.set(String(item.item_id), newItem.id);
+        itemNameMap.set(String(item.item_id), item.item_name);
         imported++;
       } catch (e) {
-        console.error(
-          "Item Import Failed:",
-          e.message,
-          "Item:",
-          item.item_name,
-        );
         failed++;
       }
     }
 
     // 2. Import PARTIES
     const partyMap = new Map();
-
-    // Pre-compute transaction sums per party for classification
-    const partyStats = {};
-    for (const txn of transactions) {
-      const pId = txn.txn_name_id;
-      if (!partyStats[pId]) partyStats[pId] = { recv: 0, paidOut: 0, owed: 0 };
-      const amount = safeFloat(txn.txn_cash_amount || 0);
-      const bal = safeFloat(txn.txn_balance_amount || 0);
-      const type = txn.txn_type;
-
-      if (type === 1 || type === 2 || type === 27) {
-        partyStats[pId].recv += amount;
-        partyStats[pId].owed += bal;
-      } else if (type === 3 || type === 83) {
-        partyStats[pId].paidOut += amount;
-      }
-    }
-
     for (const party of parties) {
       try {
-        if (party.name_type === 2 && party.name_expense_type === "2") continue;
+        // name_type: 1 = Party (Customer/Supplier), 2 = Expense/Income
+        if (party.name_type === 2) continue;
+        
+        // Determine party type:
+        // name_type=1 + name_customer_type=0 -> Customer (has purchase transactions)
+        // name_type=1 + name_customer_type=1 -> Supplier (has sales transactions - they are vendor)
+        let partyType = party.name_customer_type === 1 ? "SUPPLIER" : "CUSTOMER";
 
-        let partyType = "CUSTOMER";
-        const stat = partyStats[party.name_id] || {
-          recv: 0,
-          paidOut: 0,
-          owed: 0,
-        };
-
-        if (stat.paidOut > 0 && stat.recv === 0 && stat.owed === 0) {
-          partyType = "SUPPLIER";
-        } else if (stat.owed > 0 || stat.recv > 0) {
-          partyType = "CUSTOMER";
-        } else if (party.name_customer_type === 0 && party.name_type === 1) {
-          partyType = "SUPPLIER";
+        // Parse address: multi-line with city, state, pincode
+        const address = party.address || "";
+        let street = "", city = "", state = "", pincode = "";
+        if (address) {
+          const lines = address.split('\n').map(l => l.trim()).filter(l => l);
+          street = lines[0] || "";
+          // Find city/state line (usually "City, State-Pincode" or "City, State")
+          for (const line of lines) {
+            const match = line.match(/^([^,]+),\s*([^-\n]+)-?(\d{6})?$/);
+            if (match) {
+              city = match[1].trim();
+              state = match[2].trim();
+              pincode = match[3] || "";
+              break;
+            }
+          }
+          if (!city && lines.length > 1) {
+            const lastLine = lines[lines.length - 1];
+            const parts = lastLine.split(',').map(p => p.trim());
+            if (parts.length >= 2) {
+              city = parts[0] || "";
+              state = parts[1].replace(/\d+$/, '').trim() || "";
+              const pinMatch = parts[1].match(/(\d{6})/);
+              pincode = pinMatch ? pinMatch[1] : "";
+            }
+          }
         }
 
         const newParty = await prisma.party.create({
           data: {
             businessId,
-            name: party.full_name || party.name || "",
+            name: party.full_name || party.name || "Unknown Party",
             partyType,
             gstin: party.name_gstin_number || "",
-            pan: party.name_tin_number || "",
-            email: party.email || "",
             phone: party.phone_number || "",
-            billingAddress: {
-              street: party.address || "",
-              city: party.city || "",
-              state: party.state_name || "",
-              pincode: party.pincode || "",
-            },
+            billingAddress: { street, city, state, pincode },
             isActive: party.name_is_active !== 0,
           },
         });
-        partyMap.set(party.name_id, newParty.id);
+        partyMap.set(String(party.name_id), newParty.id);
         imported++;
       } catch (e) {
         failed++;
       }
     }
 
-    // 3. Import TRANSACTIONS (Invoices / Purchases)
-    let invoiceNum = 1;
-    let purchaseNum = 1;
+    // 3. Import TRANSACTIONS (Invoices / Purchases / Estimates)
+    const txToAccMap = new Map();
+    for (const m of paymentMappings) {
+      if (m.payment_id) txToAccMap.set(String(m.txn_id), m.payment_id);
+    }
 
     for (const txn of transactions) {
       try {
-        const partyId = partyMap.get(txn.txn_name_id);
+        const partyId = partyMap.get(String(txn.txn_name_id));
         if (!partyId) continue;
 
-        const totalAmount =
-          safeFloat(txn.txn_cash_amount || 0) +
-          safeFloat(txn.txn_balance_amount || 0);
-        const taxAmount = safeFloat(txn.txn_tax_amount || 0);
-        const subtotal = totalAmount - taxAmount;
-        const status =
-          safeFloat(txn.txn_balance_amount || 0) > 0 ? "PARTIAL" : "PAID";
+        // Handle both snake_case and camelCase
+        const cashAmt = safeFloat(txn.txn_cash_amount || txn.txnCashAmount || 0);
+        const balAmt = safeFloat(txn.txn_balance_amount || txn.txnBalanceAmount || 0);
+        const totalAmount = cashAmt + balAmt;
+        const paidAmount = cashAmt;
+        const balanceDue = balAmt;
+        
+        const pTypeId = txn.txn_payment_type_id || txn.txnPaymentTypeId || txToAccMap.get(String(txn.txn_id));
+        const bankId = bankMap.get(pTypeId);
+        const cashId = cashMap.get(pTypeId);
 
-        const invoiceLineItems = lineItems
-          .filter((li) => li.lineitem_txn_id === txn.txn_id)
+        const invLineItems = lineItems
+          .filter((li) => String(li.lineitem_txn_id) === String(txn.txn_id))
           .map((li) => {
-            const itemId = itemMap.get(li.item_id);
-            const rate = safeFloat(li.priceperunit || 0);
-            const qty = safeFloat(li.quantity || 1);
+            const vyaparItemId = String(li.item_id);
+            let itemId = itemMap.get(vyaparItemId);
+            
+            // Handle both snake_case and camelCase column names from better-sqlite3
+            const rate = safeFloat(li.priceperunit || li.pricePerUnit || 0);
+            const qty = safeFloat(li.quantity || li.qty || 1);
             const taxableAmount = rate * qty;
-            const lineTaxAmount = safeFloat(li.lineitem_tax_amount || 0);
+            const lineTaxAmount = safeFloat(
+              li.lineitem_tax_amount || 
+              li.lineitemTaxAmount || 
+              li.taxAmount ||
+              0
+            );
+            
+            // Get tax rate from lineitem_tax_id instead of assuming 18%
+            const taxRateId = li.lineitem_tax_id || li.lineitemTaxId || li.taxId;
+            const taxRate = taxRateId ? (taxRateMap.get(taxRateId) || 18) : 18;
+            const cgstRate = taxRate / 2;
+            const sgstRate = taxRate / 2;
+            
+            // Description: use item name if linked to item, otherwise use lineitem_description
+            let description = "";
+            if (itemId) {
+              // Item is linked - use the imported item's name
+              description = itemNameMap.get(vyaparItemId) || "";
+            } else if (li.lineitem_description) {
+              // No item linked - use the free text description from lineitem
+              description = li.lineitem_description;
+            }
+            // If still empty, use a placeholder
+            if (!description) {
+              description = `Item #${vyaparItemId}`; // Fallback
+            }
+
             return {
-              itemId: itemId || null,
-              description: li.lineitem_description || "",
+              itemId: itemId,
+              description: description,
               quantity: qty,
               unit: "NOS",
               rate,
-              discountPercent: safeFloat(li.lineitem_discount_percent || 0),
-              discountAmount: safeFloat(li.lineitem_discount_amount || 0),
+              discountPercent: safeFloat(li.lineitem_discount_percent || li.discountPercent || 0),
+              discountAmount: safeFloat(li.lineitem_discount_amount || li.discountAmount || 0),
               taxableAmount,
-              cgstRate: 9,
-              cgstAmount: lineTaxAmount / 2,
-              sgstRate: 9,
-              sgstAmount: lineTaxAmount / 2,
+              cgstRate, cgstAmount: lineTaxAmount / 2,
+              sgstRate, sgstAmount: lineTaxAmount / 2,
               totalAmount: taxableAmount + lineTaxAmount,
+              hsnCode: li.lineitem_hsn_code || li.hsnCode || "",
             };
           });
 
-        // Invoice = Customer transactions
-        if ([1, 2, 27].includes(txn.txn_type)) {
+        // Sum taxes from line items instead of using transaction-level tax
+        const lineItemTaxes = invLineItems.reduce((sum, li) => sum + (li.cgstAmount + li.sgstAmount || 0), 0);
+        const vyaparTaxAmount = lineItemTaxes > 0 ? lineItemTaxes : safeFloat(txn.txn_tax_amount || txn.txnTaxAmount || 0);
+        const subtotal = totalAmount - vyaparTaxAmount;
+        
+        if (invLineItems.length > 0) {
+          console.log(`Txn ${txn.txn_id}: ${invLineItems.length} items, totalAmount=${totalAmount}, lineItemTaxes=${lineItemTaxes}, vyaparTaxAmount=${vyaparTaxAmount}, subtotal=${subtotal}`);
+          console.log(`  First item: rate=${invLineItems[0].rate}, qty=${invLineItems[0].quantity}, taxableAmount=${invLineItems[0].taxableAmount}, cgstAmount=${invLineItems[0].cgstAmount}, totalAmount=${invLineItems[0].totalAmount}`);
+        }
+        const txnType = Number(txn.txn_type);
+
+        if (txnType === 1) { // SALE (Invoice to Customer)
+          const status = balanceDue > 0 ? (paidAmount > 0 ? "PARTIAL" : "SENT") : "PAID";
           await prisma.invoice.create({
             data: {
               businessId,
-              invoiceNumber: `INV${String(invoiceNum++).padStart(4, "0")}`,
+              invoiceNumber: txn.txn_ref_number_char || `INV-${txn.txn_id}`,
               partyId,
               date: new Date(txn.txn_date),
-              dueDate: txn.txn_due_date ? new Date(txn.txn_due_date) : null,
               subtotal,
-              discountAmount: safeFloat(txn.txn_discount_amount || 0),
-              discountPercent: safeFloat(txn.txn_discount_percent || 0),
-              cgstAmount: taxAmount / 2,
-              sgstAmount: taxAmount / 2,
-              igstAmount: 0,
-              roundOff: safeFloat(txn.txn_round_off_amount || 0),
+              cgstAmount: vyaparTaxAmount / 2,
+              sgstAmount: vyaparTaxAmount / 2,
               totalAmount,
-              amountInWords: "",
-              paidAmount: safeFloat(txn.txn_cash_amount || 0),
-              balanceDue: safeFloat(txn.txn_balance_amount || 0),
+              paidAmount,
+              balanceDue,
               status,
+              bankAccountId: bankId || null,
+              cashAccountId: cashId || (bankId ? null : (cashMap.size > 0 ? Array.from(cashMap.values())[0] : null)),
               notes: txn.txn_description || "",
-              items: { create: invoiceLineItems },
+              items: { create: invLineItems },
             },
           });
-        }
-        // Purchase = Supplier transactions
-        else if ([3, 83].includes(txn.txn_type)) {
+        } else if (txnType === 2) { // PURCHASE (Invoice from Supplier)
           await prisma.purchase.create({
             data: {
               businessId,
-              purchaseNumber: `PUR${String(purchaseNum++).padStart(4, "0")}`,
+              purchaseNumber: txn.txn_ref_number_char || `PUR-${txn.txn_id}`,
               partyId,
               date: new Date(txn.txn_date),
-              dueDate: txn.txn_due_date ? new Date(txn.txn_due_date) : null,
               subtotal,
-              discountAmount: parseFloat(txn.txn_discount_amount || 0),
-              discountPercent: parseFloat(txn.txn_discount_percent || 0),
-              cgstAmount: taxAmount / 2,
-              sgstAmount: taxAmount / 2,
-              igstAmount: 0,
-              roundOff: parseFloat(txn.txn_round_off_amount || 0),
+              cgstAmount: vyaparTaxAmount / 2,
+              sgstAmount: vyaparTaxAmount / 2,
               totalAmount,
-              amountInWords: "",
-              paidAmount: parseFloat(txn.txn_cash_amount || 0),
-              balanceDue: parseFloat(txn.txn_balance_amount || 0),
-              status: status === "PARTIAL" ? "PARTIAL" : "RECEIVED",
+              paidAmount,
+              balanceDue,
+              status: balanceDue > 0 ? "PARTIAL" : "RECEIVED",
               notes: txn.txn_description || "",
-              items: { create: invoiceLineItems },
+              items: { create: invLineItems },
             },
           });
-        }
+        } else if (txnType === 27) { // ESTIMATE
+          await prisma.estimate.create({
+            data: {
+              businessId,
+              estimateNumber: txn.txn_ref_number_char || `EST-${txn.txn_id}`,
+              partyId,
+              date: new Date(txn.txn_date),
+              subtotal,
+              taxAmount: vyaparTaxAmount,
+              totalAmount,
+              status: "SENT",
+              notes: txn.txn_description || "",
+              items: { create: invLineItems },
+            },
+          });
+        } else if (txnType === 3) { // SALE RETURN (Credit Note)
+          await prisma.invoice.create({
+            data: {
+              businessId,
+              invoiceNumber: `SR-${txn.txn_ref_number_char || txn.txn_id}`,
+              partyId,
+              date: new Date(txn.txn_date),
+              subtotal: -subtotal,
+              cgstAmount: -vyaparTaxAmount / 2,
+              sgstAmount: -vyaparTaxAmount / 2,
+              totalAmount: -totalAmount,
+              paidAmount: -paidAmount,
+              balanceDue: -balanceDue,
+              status: "PAID",
+              notes: `[VYAPAR SALE RETURN] ${txn.txn_description || ""}`,
+              items: { create: invLineItems },
+            },
+          });
+        } else if (txnType === 83) { // PURCHASE RETURN (Debit Note) // PURCHASE RETURN
+          await prisma.purchase.create({
+            data: {
+              businessId,
+              purchaseNumber: `PR-${txn.txn_ref_number_char || txn.txn_id}`,
+              partyId,
+              date: new Date(txn.txn_date),
+              subtotal: -subtotal,
+              cgstAmount: -vyaparTaxAmount / 2,
+              sgstAmount: -vyaparTaxAmount / 2,
+              totalAmount: -totalAmount,
+              paidAmount: -paidAmount,
+              balanceDue: -balanceDue,
+              status: "RECEIVED",
+              notes: `[VYAPAR PURCHASE RETURN] ${txn.txn_description || ""}`,
+              items: { create: invLineItems },
+            },
+          });
+        } else if (txnType === 4 || txnType === 5) { // PAYMENT IN / OUT
+          const isReceipt = txnType === 4;
+          const method = bankId ? "BANK" : "CASH";
+          
+          if (isReceipt) {
+            await prisma.receipt.create({
+              data: {
+                businessId,
+                receiptNumber: txn.txn_ref_number_char || `REC-${txn.txn_id}`,
+                partyId,
+                date: new Date(txn.txn_date),
+                amount: totalAmount,
+                paymentMethod: method,
+                reference: txn.txn_payment_reference || "",
+                notes: txn.txn_description || "",
+              },
+            });
+          } else {
+            await prisma.payment.create({
+              data: {
+                businessId,
+                paymentNumber: txn.txn_ref_number_char || `PAY-${txn.txn_id}`,
+                partyId,
+                date: new Date(txn.txn_date),
+                amount: totalAmount,
+                paymentMethod: method,
+                reference: txn.txn_payment_reference || "",
+                notes: txn.txn_description || "",
+              },
+            });
+          }
 
+          // Also create a Transaction record for Ledger/Balance synchronization
+          await prisma.transaction.create({
+            data: {
+              businessId,
+              date: new Date(txn.txn_date),
+              type: isReceipt ? "RECEIPT" : "PAYMENT",
+              reference: txn.txn_ref_number_char || (isReceipt ? `REC-${txn.txn_id}` : `PAY-${txn.txn_id}`),
+              partyId,
+              bankAccountId: bankId || null,
+              cashAccountId: cashId || (bankId ? null : (cashMap.size > 0 ? Array.from(cashMap.values())[0] : null)),
+              amount: totalAmount,
+              balance: 0,
+              narration: txn.txn_description || (isReceipt ? "Payment Received (Vyapar)" : "Payment Made (Vyapar)"),
+            },
+          });
+
+          // Atomic update for Bank/Cash balances
+          if (bankId) {
+            await prisma.bankAccount.update({
+              where: { id: bankId },
+              data: { currentBalance: { [isReceipt ? 'increment' : 'decrement']: totalAmount } }
+            });
+          } else if (cashId) {
+            await prisma.cashAccount.update({
+              where: { id: cashId },
+              data: { currentBalance: { [isReceipt ? 'increment' : 'decrement']: totalAmount } }
+            });
+          }
+        }
         imported++;
       } catch (e) {
+        console.error(`Txn Import Fail [ID: ${txn.txn_id}]:`, e.message);
         failed++;
       }
     }
@@ -374,16 +625,19 @@ async function importFromSqlite(db, businessId, importLogId) {
         status: failed > imported ? "PARTIAL" : "COMPLETED",
         recordsImported: imported,
         recordsFailed: failed,
+        recordsTotal: imported + failed,
       },
     });
 
-    console.log(`Import completed: ${imported} imported, ${failed} failed`);
+    console.log(`=== IMPORT DONE: ${imported} imported, ${failed} failed ===`);
+    return { imported, failed, items: items.length, parties: parties.length, transactions: transactions.length };
   } catch (e) {
-    console.error("Transaction error:", e);
+    console.error("=== IMPORT FAILED ===", e.message, e.stack);
     await prisma.importLog.update({
       where: { id: importLogId },
       data: { status: "FAILED" },
     });
+    throw e;
   }
 }
 
@@ -461,6 +715,22 @@ router.get("/history/business/:businessId", async (req, res, next) => {
       where: { businessId: req.params.businessId },
       orderBy: { startedAt: "desc" },
       take: 20,
+    });
+    res.json({ success: true, data: logs });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Debug endpoint - check import logs
+router.get("/debug-logs", async (req, res, next) => {
+  try {
+    const businessId = req.query.businessId;
+    const where = businessId ? { businessId } : {};
+    const logs = await prisma.importLog.findMany({
+      where,
+      orderBy: { startedAt: "desc" },
+      take: 10,
     });
     res.json({ success: true, data: logs });
   } catch (error) {

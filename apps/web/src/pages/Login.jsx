@@ -11,16 +11,20 @@ function Login() {
   const navigate = useNavigate();
   const login = useAuthStore(state => state.login);
   const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    const formData = new FormData(e.target);
+    console.log('📝 [UI DEBUG] Form Submit State: ' + JSON.stringify({ email, passwordLength: password.length }));
+    
     try {
-      await login(formData.get('email'), formData.get('password'));
+      await login(email, password);
       toast.success('System Linked & Verified');
       navigate('/');
     } catch (error) {
+      console.error('❌ [UI DEBUG] Login Error: ' + JSON.stringify(error.response?.data || error.message));
       toast.error(error.response?.data?.message || 'Verification Failed');
     } finally {
       setLoading(false);
@@ -29,7 +33,7 @@ function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 mesh-gradient relative overflow-hidden font-sans">
-      {/* ── Visual Accents ── */}
+      {/* Visual Accents */}
       <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-indigo-600/10 rounded-full blur-[120px] -ml-64 -mt-64 animate-pulse" />
       <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-purple-600/10 rounded-full blur-[120px] -mr-64 -mb-64 animate-pulse" style={{ animationDelay: '2s' }} />
 
@@ -59,6 +63,8 @@ function Login() {
                     name="email"
                     type="email"
                     required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     placeholder="e.g. alphesh@artha.com"
                     className="input-base !h-14 !text-base focus:scale-[1.01] transition-all"
                     autoComplete="email"
@@ -72,6 +78,8 @@ function Login() {
                     name="password"
                     type="password"
                     required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
                     className="input-base !h-14 !text-base focus:scale-[1.01] transition-all"
                     autoComplete="current-password"

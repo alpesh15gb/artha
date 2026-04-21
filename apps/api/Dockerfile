@@ -35,4 +35,6 @@ RUN mkdir -p uploads
 
 EXPOSE 3001
 
-CMD ["sh", "-c", "npx prisma db push && node src/index.js"]
+VOLUME /app/apps/api/uploads
+
+CMD ["sh", "-c", "npx prisma migrate deploy && node src/index.js"]

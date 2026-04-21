@@ -241,11 +241,40 @@ function Layout({ children }) {
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
-      {/* ── Sidebar ─────────────────────────────────── */}
+      {/* ── Mobile Bottom Navigation ────────────────────────── */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-20 bg-white border-t border-slate-200 flex items-center justify-around px-2 z-50 shadow-[0_-1px_10px_rgba(0,0,0,0.05)]">
+        {[
+          { path: "/dashboard", label: "Home", icon: LayoutDashboard },
+          { path: "/invoices", label: "Sales", icon: FileText },
+          { path: "/purchases", label: "Buy", icon: ShoppingCart },
+          { path: "/reports", label: "Reports", icon: BarChart3 },
+          { path: "/settings", label: "Settings", icon: Settings },
+        ].map((item) => {
+          const isActive = location.pathname.startsWith(item.path);
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.path}
+              to={item.path}
+              className={cn(
+                "flex flex-col items-center gap-1.5 px-3 py-2 rounded-2xl transition-all",
+                isActive ? "text-indigo-600 scale-105" : "text-slate-400"
+              )}
+            >
+              <Icon className={cn("w-6 h-6", isActive && "stroke-[2.5px]")} />
+              <span className="text-[10px] font-black uppercase tracking-tighter">
+                {item.label}
+              </span>
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* ── Sidebar (Desktop Only) ────────────────────────── */}
       <motion.aside
         animate={{ width: isCollapsed ? 88 : 280 }}
         transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
-        className="flex flex-col bg-white border-r border-slate-200 z-50 relative no-print shadow-[4px_0_24px_-10px_rgba(0,0,0,0.05)]"
+        className="hidden md:flex flex-col bg-white border-r border-slate-200 z-50 relative no-print shadow-[4px_0_24px_-10px_rgba(0,0,0,0.05)]"
       >
         {/* Brand */}
         <div
@@ -379,27 +408,27 @@ function Layout({ children }) {
 
       {/* ── Main Canvas ─────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-10 z-40 no-print sticky top-0">
+        <header className="h-16 md:h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-6 md:px-10 z-40 no-print sticky top-0">
           <div className="flex items-center gap-6">
-            <div className="hidden sm:flex items-center gap-3 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl w-80 group focus-within:ring-4 focus-within:ring-indigo-600/5 transition-all">
+            <div className="md:hidden w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black text-sm">A</div>
+            <div className="hidden sm:flex items-center gap-3 px-4 py-2 bg-slate-50 border border-slate-200 rounded-2xl w-64 md:w-80 group focus-within:ring-4 focus-within:ring-indigo-600/5 transition-all">
               <Search className="w-4 h-4 text-slate-400" />
               <input
                 type="text"
                 name="search"
-                placeholder="Omni Search (⌘K)"
-                aria-label="Global search"
-                className="bg-transparent border-none outline-none text-xs font-bold text-slate-900 w-full"
+                placeholder="Search..."
+                className="bg-transparent border-none outline-none text-[11px] font-bold text-slate-900 w-full"
               />
             </div>
           </div>
 
-          <div className="flex items-center gap-5" ref={quickAddRef}>
+          <div className="flex items-center gap-3 md:gap-5" ref={quickAddRef}>
             <div className="relative">
               <button
                 onClick={() => setShowQuickAdd(!showQuickAdd)}
-                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-indigo-600/20 active:scale-95 transition-all"
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 md:px-5 py-2 md:py-2.5 rounded-2xl text-[10px] md:text-[11px] font-black uppercase tracking-widest shadow-xl shadow-indigo-600/20"
               >
-                <Plus className="w-4 h-4" /> NEW DOCUMENT
+                <Plus className="w-4 h-4" /> <span className="hidden xs:inline">NEW</span>
               </button>
               <AnimatePresence>
                 {showQuickAdd && (
@@ -429,23 +458,15 @@ function Layout({ children }) {
               </AnimatePresence>
             </div>
 
-            <div className="h-4 w-px bg-slate-200" />
-
-            <button className="p-2.5 text-slate-400 hover:text-indigo-600 transition-colors relative">
+            <div className="hidden md:block h-4 w-px bg-slate-200" />
+            <button className="p-2 text-slate-400 hover:text-indigo-600 relative">
               <Bell className="w-5 h-5" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border-2 border-white ring-2 ring-rose-500/20" />
             </button>
-            <Link
-              to="/settings"
-              className="p-2.5 text-slate-400 hover:text-indigo-600 transition-colors"
-            >
-              <Settings className="w-5 h-5" />
-            </Link>
           </div>
         </header>
 
         <main className="flex-1 overflow-y-auto no-scrollbar relative">
-          <div className="p-8 pb-32">{children}</div>
+          <div className="p-4 md:p-8 pb-32">{children}</div>
         </main>
       </div>
     </div>

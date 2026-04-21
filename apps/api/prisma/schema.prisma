@@ -475,10 +475,14 @@ model Invoice {
   ackNo           String?
   ackDate         DateTime?
   qrCode          String?
+  bankAccountId   String?
+  cashAccountId   String?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   business Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
   party    Party         @relation(fields: [partyId], references: [id])
+  bankAccount BankAccount? @relation(fields: [bankAccountId], references: [id])
+  cashAccount CashAccount? @relation(fields: [cashAccountId], references: [id])
   items    InvoiceItem[]
   adjustments PaymentAdjustment[]
   @@unique([businessId, invoiceNumber])
@@ -695,6 +699,7 @@ model BankAccount {
   updatedAt      DateTime @updatedAt
   business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
   transactions Transaction[]
+  invoices     Invoice[]
   @@map("bank_accounts")
 }
 
@@ -709,6 +714,7 @@ model CashAccount {
   updatedAt      DateTime @updatedAt
   business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
   transactions Transaction[]
+  invoices     Invoice[]
   @@map("cash_accounts")
 }
 

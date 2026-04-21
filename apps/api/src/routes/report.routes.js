@@ -290,10 +290,10 @@ router.get("/business/:businessId/gst-summary", async (req, res, next) => {
         invoiceCount: acc.invoiceCount + 1,
         totalTax:
           acc.totalTax +
-          inv.cgstAmount +
-          inv.sgstAmount +
-          inv.igstAmount +
-          inv.cessAmount,
+          (inv.cgstAmount || 0) +
+          (inv.sgstAmount || 0) +
+          (inv.igstAmount || 0) +
+          (inv.cessAmount || 0),
       }),
       {
         totalSales: 0,
@@ -318,10 +318,10 @@ router.get("/business/:businessId/gst-summary", async (req, res, next) => {
         purchaseCount: acc.purchaseCount + 1,
         totalTax:
           acc.totalTax +
-          pur.cgstAmount +
-          pur.sgstAmount +
-          pur.igstAmount +
-          pur.cessAmount,
+          (pur.cgstAmount || 0) +
+          (pur.sgstAmount || 0) +
+          (pur.igstAmount || 0) +
+          (pur.cessAmount || 0),
       }),
       {
         totalPurchases: 0,

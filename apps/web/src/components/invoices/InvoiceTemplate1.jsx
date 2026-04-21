@@ -187,10 +187,10 @@ export function InvoiceTemplate1({ invoice, business, party, items: rawItems = [
           <div className="mt-2 border-t border-black pt-1">
             <div className="font-bold underline">Bank Details :</div>
             <div className="grid grid-cols-2 text-[10px]">
-              <div>Bank: <span className="font-bold uppercase">{business?.bankName}</span></div>
-              <div>Branch: <span className="font-bold uppercase">{business?.branchName || 'MAIN BRANCH'}</span></div>
-              <div>Acc No : <span className="font-bold uppercase">{business?.accountNumber}</span></div>
-              <div>IFSC Code : <span className="font-bold uppercase">{business?.ifscCode}</span></div>
+              <div>Bank: <span className="font-bold uppercase">{invoice?.bankAccount?.bankName || business?.bankName || '-'}</span></div>
+              <div>Branch: <span className="font-bold uppercase">{invoice?.bankAccount?.branchName || business?.branchName || 'MAIN BRANCH'}</span></div>
+              <div>Acc No : <span className="font-bold uppercase">{invoice?.bankAccount?.accountNumber || business?.accountNumber || '-'}</span></div>
+              <div>IFSC Code : <span className="font-bold uppercase">{invoice?.bankAccount?.ifscCode || business?.ifscCode || '-'}</span></div>
             </div>
           </div>
         </div>

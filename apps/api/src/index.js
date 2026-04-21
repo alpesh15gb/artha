@@ -4,6 +4,8 @@ import dotenv from "dotenv";
 import fileUpload from "express-fileupload";
 import path from "path";
 import { fileURLToPath } from "url";
+import PDFDocument from 'pdfkit';
+import { PrismaClient } from "@prisma/client";
 
 import authRoutes from "./routes/auth.routes.js";
 import businessRoutes from "./routes/business.routes.js";
@@ -35,16 +37,23 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const prisma = new PrismaClient();
 
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(
-  fileUpload({
-    limits: { fileSize: 50 * 1024 * 1024 },
-    abortOnLimit: true,
-  }),
-);
+
+// Universal Debugger & JSON Fixer
+app.use((req, res, next) => {
+  console.log(`📡 [API REQUEST] ${req.method} ${req.url}`);
+  if (req.body && typeof req.body === 'string') {
+    try {
+      req.body = JSON.parse(req.body);
+      console.log('🔧 Fixed stringified body from mobile');
+    } catch (e) {}
+  }
+  next();
+});
 
 app.use(securityHeaders);
 app.use(rateLimiter);
@@ -65,6 +74,9 @@ app.use("/api/payments", auditLogger("PAYMENT"), paymentRoutes);
 app.use("/api/expenses", auditLogger("EXPENSE"), expenseRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/accounts", accountRoutes);
+
+import prismaShared from "./lib/prisma.js";
+
 app.use("/api/download", downloadRoutes);
 app.use("/api/import", importRoutes);
 app.use("/api/admin", adminRoutes);
@@ -73,6 +85,11 @@ app.use("/api/complaints", complaintRoutes);
 
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+app.use((req, res, next) => {
+  console.log(`[404 DEBUG] Not Found: ${req.method} ${req.url}`);
+  res.status(404).json({ success: false, message: `Route ${req.url} not found` });
 });
 
 app.use(errorHandler);

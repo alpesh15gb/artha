@@ -48,6 +48,7 @@ import {
   Info,
   ExternalLink,
   RefreshCw,
+  AlertCircle,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
@@ -103,6 +104,8 @@ function Settings() {
   const [editingAccount, setEditingAccount] = useState(null);
   const [isFetchingGst, setIsFetchingGst] = useState(false);
   const [showClosingWizard, setShowClosingWizard] = useState(false);
+  const [showPurgeModal, setShowPurgeModal] = useState(false);
+  const [purgeConfirmText, setPurgeConfirmText] = useState("");
 
   const businessId = currentBusiness?.id;
 
@@ -1461,6 +1464,94 @@ function Settings() {
                       Save Data Settings
                     </Button>
                   </div>
+
+                  <div className="mt-12 pt-8 border-t border-rose-100">
+                    <div className="bg-rose-50 rounded-[2.5rem] p-8 border border-rose-100 flex flex-col md:flex-row items-center gap-8">
+                      <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-rose-600 shadow-sm border border-rose-100">
+                        <Trash2 className="w-8 h-8" />
+                      </div>
+                      <div className="flex-1 text-center md:text-left">
+                        <h3 className="text-lg font-black text-rose-900 uppercase tracking-tight">Danger Zone: Workspace Purge</h3>
+                        <p className="text-xs font-medium text-rose-600 mt-1 opacity-80">
+                          Permanently delete all financial records, items, parties and bank accounts. This action is IRREVOCABLE.
+                        </p>
+                      </div>
+                      <Button 
+                        variant="ghost"
+                        onClick={() => setShowPurgeModal(true)}
+                        className="!bg-rose-600 !text-white hover:!bg-rose-700 !rounded-xl !font-black !text-[10px] uppercase tracking-widest !px-8 shadow-lg shadow-rose-600/20"
+                      >
+                        Purge All Data
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Modal
+                    isOpen={showPurgeModal}
+                    onClose={() => {
+                      setShowPurgeModal(false);
+                      setPurgeConfirmText("");
+                    }}
+                    title="Critical Account Security: Data Purge"
+                  >
+                    <div className="space-y-6">
+                      <div className="p-6 bg-rose-50 rounded-2xl border border-rose-100">
+                        <div className="flex items-center gap-3 mb-2 text-rose-600">
+                          <AlertCircle className="w-5 h-5" />
+                          <h4 className="text-sm font-black uppercase tracking-tight">Destructive Action Protocol</h4>
+                        </div>
+                        <p className="text-xs font-semibold text-rose-800 leading-relaxed">
+                          This will erase all Invoices, Purchases, Items, Parties, Estimates and Bank records for this business. This cannot be undone.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                          Type <span className="text-rose-600 font-black">PURGE</span> to confirm
+                        </label>
+                        <input 
+                          type="text" 
+                          className="input-base border-rose-200 focus:ring-rose-500" 
+                          placeholder="PURGE"
+                          value={purgeConfirmText}
+                          onChange={(e) => setPurgeConfirmText(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="flex justify-end gap-3 pt-4">
+                        <Button 
+                          variant="secondary" 
+                          onClick={() => {
+                            setShowPurgeModal(false);
+                            setPurgeConfirmText("");
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                        <Button 
+                          disabled={purgeConfirmText !== 'PURGE'}
+                          onClick={async () => {
+                            toast.promise(
+                              api.post('/import/purge', { businessId }),
+                              {
+                                loading: 'Purging Workspace...',
+                                success: () => {
+                                  setShowPurgeModal(false);
+                                  setPurgeConfirmText("");
+                                  loadSettings();
+                                  return 'Workspace Reset Successfully';
+                                },
+                                error: 'Purge Failed',
+                              }
+                            );
+                          }}
+                          className="!bg-rose-600 !text-white hover:!bg-rose-700 disabled:!bg-slate-200 disabled:!text-slate-400"
+                        >
+                          Confirm Final Purge
+                        </Button>
+                      </div>
+                    </div>
+                  </Modal>
                 </div>
               )}
 

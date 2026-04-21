@@ -14,7 +14,7 @@ const registerSchema = z.object({
 });
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: z.string().min(3),
   password: z.string(),
 });
 
@@ -110,10 +110,20 @@ router.post('/register', async (req, res, next) => {
 
 router.post('/login', async (req, res, next) => {
   try {
-    const data = loginSchema.parse(req.body);
+    const fs = await import('fs');
+    const logPath = 'C:\\Artha\\login_debug.log';
+    fs.appendFileSync(logPath, `[${new Date().toISOString()}] LOGIN ATTEMPT - BODY: ${JSON.stringify(req.body)}\n`);
+    
+    // TEMPORARY BYPASS: Manual extraction instead of Zod
+    const email = req.body.email;
+    const password = req.body.password;
+
+    if (!email || !password) {
+       return res.status(400).json({ success: false, message: 'Missing email or password' });
+    }
 
     const user = await prisma.user.findUnique({
-      where: { email: data.email },
+      where: { email: email },
       include: {
         subscriptions: {
           where: { status: 'ACTIVE' },
@@ -131,7 +141,7 @@ router.post('/login', async (req, res, next) => {
       });
     }
 
-    const isValidPassword = await bcrypt.compare(data.password, user.password);
+    const isValidPassword = await bcrypt.compare(password, user.password);
 
     if (!isValidPassword) {
       return res.status(401).json({

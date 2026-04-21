@@ -35,8 +35,23 @@ function Accounts() {
   const [addAccountType, setAddAccountType] = useState("bank");
   const [accountForm, setAccountForm] = useState({
     bankName: "",
+    accountName: "",
     accountNumber: "",
+    ifscCode: "",
+    branchName: "",
+    accountType: "SAVINGS",
     openingBalance: 0,
+  });
+  const [editingAccount, setEditingAccount] = useState(null);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferForm, setTransferForm] = useState({
+    fromId: "",
+    fromType: "BANK",
+    toId: "",
+    toType: "CASH",
+    amount: 0,
+    date: new Date().toISOString().split("T")[0],
+    reference: "",
   });
 
   const { data: bankAccountsData, isLoading: isLoadingAccounts } = useQuery({
@@ -68,38 +83,92 @@ function Accounts() {
     enabled: !!currentBusiness?.id,
   });
 
-  const addAccountMutation = useMutation({
+  const accountMutation = useMutation({
     mutationFn: (data) => {
-      if (addAccountType === "bank") {
-        return api.post("/accounts/bank-accounts", {
+      const isBank = addAccountType === "bank";
+      const endpoint = isBank ? "/accounts/bank-accounts" : "/accounts/cash-accounts";
+      
+      // Construct payload carefully
+      let payload = {
+        businessId: currentBusiness.id,
+      };
+
+      if (isBank) {
+        payload = {
+          ...payload,
           bankName: data.bankName,
-          accountName: data.bankName,
+          accountName: data.accountName || data.bankName,
           accountNumber: data.accountNumber,
-          ifscCode: "UNKNOWN",
-          businessId: currentBusiness.id,
-          currentBalance: data.openingBalance || 0,
-        });
-      } else {
-        return api.post("/accounts/cash-accounts", {
-          name: data.bankName,
-          businessId: currentBusiness.id,
+          ifscCode: data.ifscCode || "UNKNOWN",
+          branchName: data.branchName,
+          accountType: data.accountType,
           openingBalance: data.openingBalance || 0,
-        });
+        };
+        if (!editingAccount) {
+          payload.currentBalance = data.openingBalance || 0;
+        }
+      } else {
+        payload = {
+          ...payload,
+          name: data.bankName,
+          openingBalance: data.openingBalance || 0,
+        };
+        if (!editingAccount) {
+          payload.currentBalance = data.openingBalance || 0;
+        }
       }
+
+      if (editingAccount) {
+        return api.patch(`${endpoint}/${editingAccount.id}`, payload);
+      }
+      return api.post(endpoint, payload);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(["bank-accounts", "cash-accounts"]);
-      toast.success("Resource Registered");
+      queryClient.invalidateQueries({ queryKey: ["bank-accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["cash-accounts"] });
+      queryClient.refetchQueries({ queryKey: ["bank-accounts"] });
+      queryClient.refetchQueries({ queryKey: ["cash-accounts"] });
+      toast.success(editingAccount ? "Account Details Updated" : "Resource Registered");
       setShowAddModal(false);
-      setAccountForm({ bankName: "", accountNumber: "", openingBalance: 0 });
+      setEditingAccount(null);
+      setAccountForm({ 
+        bankName: "", accountName: "", accountNumber: "", 
+        ifscCode: "", branchName: "", accountType: "SAVINGS", 
+        openingBalance: 0 
+      });
     },
-    onError: () => toast.error("Registration Failed"),
+    onError: () => toast.error(editingAccount ? "Update Failed" : "Registration Failed"),
+  });
+
+  const transferMutation = useMutation({
+    mutationFn: (data) => api.post("/accounts/transfer", { ...data, businessId: currentBusiness.id }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bank-accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["cash-accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      toast.success("Liquid Assets Transferred");
+      setShowTransferModal(false);
+      setTransferForm({
+        fromId: "",
+        fromType: "BANK",
+        toId: "",
+        toType: "CASH",
+        amount: 0,
+        date: new Date().toISOString().split("T")[0],
+        reference: "",
+      });
+    },
+    onError: () => toast.error("Transfer Operation Failed"),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => api.delete(`/accounts/${id}`),
+    mutationFn: (acc) => {
+      const endpoint = acc.bankName ? "/accounts/bank-accounts" : "/accounts/cash-accounts";
+      return api.delete(`${endpoint}/${acc.id}`);
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries(["bank-accounts", "cash-accounts"]);
+      queryClient.invalidateQueries({ queryKey: ["bank-accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["cash-accounts"] });
       toast.success("Account Link Removed");
     },
   });
@@ -125,11 +194,23 @@ function Accounts() {
           </p>
         </div>
         <div className="flex gap-3">
-          <button className="btn-secondary !rounded-2xl !py-2 !px-4">
+          <button 
+            onClick={() => setShowTransferModal(true)}
+            className="btn-secondary !rounded-2xl !py-2 !px-4"
+          >
             <ArrowRightLeft className="w-4 h-4 mr-2" /> Fund Transfer
           </button>
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => {
+              setEditingAccount(null);
+              setAccountForm({ 
+                bankName: "", accountName: "", accountNumber: "", 
+                ifscCode: "", branchName: "", accountType: "SAVINGS", 
+                openingBalance: 0 
+              });
+              setAddAccountType("bank");
+              setShowAddModal(true);
+            }}
             className="btn-primary !rounded-2xl !py-2 !px-6"
           >
             <Plus className="w-4 h-4 mr-2" /> Link Account
@@ -208,12 +289,31 @@ function Accounts() {
                       <Banknote className="w-6 h-6" />
                     )}
                   </div>
-                  <div className="flex gap-1 opacity-10 group-hover:opacity-100 transition-all">
-                    <button className="p-2 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-indigo-600">
-                      <Edit3 className="w-4 h-4" />
+                  <div className="flex gap-1 transition-all">
+                    <button 
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setEditingAccount(acc);
+                        setAddAccountType(acc.bankName ? "bank" : "cash");
+                        setAccountForm({
+                          bankName: acc.bankName || acc.name,
+                          accountName: acc.accountName || acc.bankName || acc.name,
+                          accountNumber: acc.accountNumber || "",
+                          ifscCode: acc.ifscCode || "",
+                          branchName: acc.branchName || "",
+                          accountType: acc.accountType || "SAVINGS",
+                          openingBalance: acc.openingBalance || 0
+                        });
+                        setShowAddModal(true);
+                      }}
+                      className="p-3 bg-amber-400 rounded-xl text-slate-900 shadow-xl z-50 transform active:scale-95"
+                    >
+                      <Edit3 className="w-5 h-5 font-black" />
                     </button>
                     <button
-                      onClick={() => deleteMutation.mutate(acc.id)}
+                      onClick={() => deleteMutation.mutate(acc)}
                       className="p-2 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-rose-600"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -355,12 +455,16 @@ function Accounts() {
 
       <Modal
         isOpen={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        title="Link New Asset Account"
+        onClose={() => {
+          setShowAddModal(false);
+          setEditingAccount(null);
+        }}
+        title={editingAccount ? "Update Asset Identity" : "Link New Asset Account"}
       >
         <div className="space-y-6 pt-4">
           <div className="flex bg-slate-100 p-1 rounded-2xl">
             <button
+              disabled={!!editingAccount}
               onClick={() => {
                 setAddAccountType("bank");
                 setAccountForm({ ...accountForm, bankName: "" });
@@ -375,6 +479,7 @@ function Accounts() {
               Bank Transfer
             </button>
             <button
+              disabled={!!editingAccount}
               onClick={() => {
                 setAddAccountType("cash");
                 setAccountForm({ ...accountForm, bankName: "" });
@@ -406,20 +511,58 @@ function Accounts() {
               }
             />
             {addAccountType === "bank" && (
-              <Input
-                label="Account Identity (Last 4 Digits)"
-                placeholder="0000"
-                value={accountForm.accountNumber}
-                onChange={(e) =>
-                  setAccountForm({
-                    ...accountForm,
-                    accountNumber: e.target.value,
-                  })
-                }
-              />
+              <>
+                <Input
+                  label="Display Name of Account"
+                  placeholder="e.g. Current Account - Main"
+                  value={accountForm.accountName}
+                  onChange={(e) =>
+                    setAccountForm({ ...accountForm, accountName: e.target.value })
+                  }
+                />
+                <Input
+                  label="Account Number"
+                  placeholder="e.g. 501004562..."
+                  value={accountForm.accountNumber}
+                  onChange={(e) =>
+                    setAccountForm({ ...accountForm, accountNumber: e.target.value })
+                  }
+                />
+                <div className="grid grid-cols-2 gap-4">
+                  <Input
+                    label="IFSC Code"
+                    placeholder="HDFC000..."
+                    value={accountForm.ifscCode}
+                    onChange={(e) =>
+                      setAccountForm({ ...accountForm, ifscCode: e.target.value.toUpperCase() })
+                    }
+                  />
+                  <Input
+                    label="Branch Name"
+                    placeholder="e.g. New Delhi"
+                    value={accountForm.branchName}
+                    onChange={(e) =>
+                      setAccountForm({ ...accountForm, branchName: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-medium text-slate-700">Account Type</label>
+                  <select
+                    className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                    value={accountForm.accountType}
+                    onChange={(e) => setAccountForm({ ...accountForm, accountType: e.target.value })}
+                  >
+                    <option value="SAVINGS">Savings</option>
+                    <option value="CURRENT">Current</option>
+                    <option value="OVERDRAFT">Overdraft</option>
+                    <option value="CREDIT">Credit Card</option>
+                  </select>
+                </div>
+              </>
             )}
             <Input
-              label="Opening Liquidity"
+              label="Opening Liquidity (₹)"
               type="number"
               placeholder="0.00"
               value={accountForm.openingBalance}
@@ -433,12 +576,109 @@ function Accounts() {
           </div>
 
           <button
-            onClick={() => addAccountMutation.mutate(accountForm)}
-            disabled={!accountForm.bankName || addAccountMutation.isPending}
+            onClick={() => accountMutation.mutate(accountForm)}
+            disabled={!accountForm.bankName || accountMutation.isPending}
             className="btn-primary w-full !py-3 !rounded-2xl flex items-center justify-center gap-2"
           >
-            {addAccountMutation.isPending ? "Syncing..." : "Link Asset"}{" "}
+            {accountMutation.isPending ? "Syncing..." : editingAccount ? "Save Changes" : "Link Asset"}{" "}
             <CheckCircle2 className="w-4 h-4" />
+          </button>
+        </div>
+      </Modal>
+
+      {/* ── Transfer Modal ── */}
+      <Modal
+        isOpen={showTransferModal}
+        onClose={() => setShowTransferModal(false)}
+        title="Inter-Account Fund Transfer"
+      >
+        <div className="space-y-6 pt-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase text-slate-400">Source Account</label>
+              <select
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm"
+                value={`${transferForm.fromId}|${transferForm.fromType}`}
+                onChange={(e) => {
+                  const [id, type] = e.target.value.split("|");
+                  setTransferForm({ ...transferForm, fromId: id, fromType: type });
+                }}
+              >
+                <option value="">Select Source</option>
+                <optgroup label="Bank Accounts">
+                  {bankAccounts.map((acc) => (
+                    <option key={acc.id} value={`${acc.id}|BANK`}>
+                      {acc.bankName} (₹{acc.currentBalance})
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Cash Accounts">
+                  {cashAccounts.map((acc) => (
+                    <option key={acc.id} value={`${acc.id}|CASH`}>
+                      {acc.name} (₹{acc.currentBalance})
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase text-slate-400">Destination</label>
+              <select
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm"
+                value={`${transferForm.toId}|${transferForm.toType}`}
+                onChange={(e) => {
+                  const [id, type] = e.target.value.split("|");
+                  setTransferForm({ ...transferForm, toId: id, toType: type });
+                }}
+              >
+                <option value="">Select Destination</option>
+                <optgroup label="Bank Accounts">
+                  {bankAccounts.map((acc) => (
+                    <option key={acc.id} value={`${acc.id}|BANK`}>
+                      {acc.bankName} (₹{acc.currentBalance})
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Cash Accounts">
+                  {cashAccounts.map((acc) => (
+                    <option key={acc.id} value={`${acc.id}|CASH`}>
+                      {acc.name} (₹{acc.currentBalance})
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+            </div>
+          </div>
+
+          <Input
+            label="Transfer Amount (₹)"
+            type="number"
+            placeholder="0.00"
+            value={transferForm.amount}
+            onChange={(e) => setTransferForm({ ...transferForm, amount: parseFloat(e.target.value) || 0 })}
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Transfer Date"
+              type="date"
+              value={transferForm.date}
+              onChange={(e) => setTransferForm({ ...transferForm, date: e.target.value })}
+            />
+            <Input
+              label="Reference"
+              placeholder="e.g. ATM Withdrawal"
+              value={transferForm.reference}
+              onChange={(e) => setTransferForm({ ...transferForm, reference: e.target.value })}
+            />
+          </div>
+
+          <button
+            onClick={() => transferMutation.mutate(transferForm)}
+            disabled={!transferForm.fromId || !transferForm.toId || transferForm.amount <= 0 || transferMutation.isPending}
+            className="btn-primary w-full !py-3 !rounded-2xl flex items-center justify-center gap-2"
+          >
+            {transferMutation.isPending ? "Executing..." : "Authorize Transfer"} <ArrowRightLeft className="w-4 h-4" />
           </button>
         </div>
       </Modal>

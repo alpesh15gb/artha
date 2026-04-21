@@ -89,10 +89,20 @@ router.patch('/bank-accounts/:id', async (req, res, next) => {
       where: { id: req.params.id, business: { userId: req.user.id } },
     });
     if (!account) return res.status(404).json({ success: false, message: 'Account not found' });
+    
+    const updateData = { ...req.body };
+    delete updateData.id;
 
     const updatedAccount = await prisma.bankAccount.update({
       where: { id: req.params.id },
-      data: req.body,
+      data: {
+        ...updateData,
+        // If openingBalance is being corrected, often the user expects currentBalance to follow
+        // but only if it's an initial setup (currentBalance was 0 or same as opening)
+        ...(updateData.openingBalance !== undefined && account.currentBalance === account.openingBalance && {
+          currentBalance: updateData.openingBalance
+        })
+      },
     });
     res.json({ success: true, data: updatedAccount });
   } catch (error) {
@@ -162,10 +172,18 @@ router.patch('/cash-accounts/:id', async (req, res, next) => {
       where: { id: req.params.id, business: { userId: req.user.id } },
     });
     if (!account) return res.status(404).json({ success: false, message: 'Account not found' });
+    
+    const updateData = { ...req.body };
+    delete updateData.id;
 
     const updatedAccount = await prisma.cashAccount.update({
       where: { id: req.params.id },
-      data: req.body,
+      data: {
+        ...updateData,
+        ...(updateData.openingBalance !== undefined && account.currentBalance === account.openingBalance && {
+          currentBalance: updateData.openingBalance
+        })
+      },
     });
     res.json({ success: true, data: updatedAccount });
   } catch (error) {
@@ -377,6 +395,98 @@ router.get('/summary/business/:businessId', async (req, res, next) => {
         },
       },
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/transfer', async (req, res, next) => {
+  try {
+    const { businessId, fromId, fromType, toId, toType, amount, date, reference, narration } = req.body;
+
+    if (!fromId || !toId || !amount) {
+      return res.status(400).json({ success: false, message: 'Invalid transfer details' });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Withdraw from Source
+      if (fromType === 'BANK') {
+        await tx.bankAccount.update({
+          where: { id: fromId },
+          data: { currentBalance: { decrement: amount } }
+        });
+        await tx.transaction.create({
+          data: {
+            businessId,
+            type: 'CONTRA',
+            bankAccountId: fromId,
+            amount,
+            date: new Date(date || Date.now()),
+            reference: reference || 'TRANSFER-OUT',
+            narration: narration || `Transfer to ${toType}`,
+            balance: 0 
+          }
+        });
+      } else {
+        await tx.cashAccount.update({
+          where: { id: fromId },
+          data: { currentBalance: { decrement: amount } }
+        });
+        await tx.transaction.create({
+          data: {
+            businessId,
+            type: 'CONTRA',
+            cashAccountId: fromId,
+            amount,
+            date: new Date(date || Date.now()),
+            reference: reference || 'TRANSFER-OUT',
+            narration: narration || `Transfer to ${toType}`,
+            balance: 0
+          }
+        });
+      }
+
+      // 2. Deposit to Destination
+      if (toType === 'BANK') {
+        await tx.bankAccount.update({
+          where: { id: toId },
+          data: { currentBalance: { increment: amount } }
+        });
+        await tx.transaction.create({
+          data: {
+            businessId,
+            type: 'CONTRA',
+            bankAccountId: toId,
+            amount,
+            date: new Date(date || Date.now()),
+            reference: reference || 'TRANSFER-IN',
+            narration: narration || `Transfer from ${fromType}`,
+            balance: 0
+          }
+        });
+      } else {
+        await tx.cashAccount.update({
+          where: { id: toId },
+          data: { currentBalance: { increment: amount } }
+        });
+        await tx.transaction.create({
+          data: {
+            businessId,
+            type: 'CONTRA',
+            cashAccountId: toId,
+            amount,
+            date: new Date(date || Date.now()),
+            reference: reference || 'TRANSFER-IN',
+            narration: narration || `Transfer from ${fromType}`,
+            balance: 0
+          }
+        });
+      }
+
+      return { success: true };
+    });
+
+    res.json(result);
   } catch (error) {
     next(error);
   }

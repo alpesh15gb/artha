@@ -48,3 +48,11 @@ chatgpt.txt
 check_excel.js
 Reports/
 .watchmanconfig
+
+# Backups and temporary files
+*_BAK.*
+*.sql
+*.txt
+*.zip
+vyapar_app/
+vyapar_extract/

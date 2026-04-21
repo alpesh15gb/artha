@@ -12,7 +12,9 @@ export const useAuthStore = create(
       setHydrated: () => set({ isHydrated: true }),
 
       login: async (email, password) => {
-        const response = await api.post('/auth/login', { email, password });
+        const cleanEmail = String(email || '').trim();
+        const cleanPassword = String(password || '').trim();
+        const response = await api.post('/auth/login', { email: cleanEmail, password: cleanPassword });
         const { user, token } = response.data.data;
         set({ user, token, isAuthenticated: true });
         api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
@@ -24,7 +26,9 @@ export const useAuthStore = create(
       },
 
       register: async (email, password, name) => {
-        const response = await api.post('/auth/register', { email, password, name });
+        const cleanEmail = String(email || '').trim();
+        const cleanPassword = String(password || '').trim();
+        const response = await api.post('/auth/register', { email: cleanEmail, password: cleanPassword, name });
         const { user, token, business } = response.data.data;
         set({ user, token, isAuthenticated: true });
         api.defaults.headers.common['Authorization'] = `Bearer ${token}`;

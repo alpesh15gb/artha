@@ -15,14 +15,18 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "lint": "turbo lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\"",
     "db:migrate": "npm run db:migrate --workspace=api",
     "db:seed": "npm run db:seed --workspace=api",
     "import:vyapar": "node apps/api/import-tools/vyapar-import.js"
   },
   "devDependencies": {
+    "@jridgewell/gen-mapping": "^0.3.13",
     "concurrently": "^8.2.2",
+    "prettier": "^3.2.5",
     "turbo": "latest",
-    "prettier": "^3.2.5"
+    "vitest": "^1.6.0"
   }
 }

@@ -126,6 +126,8 @@ router.get("/business/:businessId", async (req, res, next) => {
         include: {
           items: true,
           party: true,
+          bankAccount: true,
+          cashAccount: true,
         },
         orderBy: { date: "desc" },
         skip: (Number(page) - 1) * Number(limit),
@@ -233,6 +235,8 @@ router.post("/", checkTransactionLock("invoice"), async (req, res, next) => {
           ackNo: data.ackNo || null,
           ackDate: data.ackDate ? new Date(data.ackDate) : null,
           qrCode: data.qrCode || null,
+          bankAccountId: data.bankAccountId || null,
+          cashAccountId: data.cashAccountId || null,
           status:
             (data.paidAmount || 0) >= (data.totalAmount || 0)
               ? "PAID"
@@ -328,6 +332,9 @@ router.get("/:id", async (req, res, next) => {
         items: {
           include: { item: true },
         },
+        party: true,
+        bankAccount: true,
+        cashAccount: true,
       },
     });
 
@@ -416,6 +423,8 @@ router.put("/:id", checkTransactionLock("invoice"), async (req, res, next) => {
           ackNo: data.ackNo,
           ackDate: data.ackDate ? new Date(data.ackDate) : null,
           qrCode: data.qrCode,
+          bankAccountId: data.bankAccountId,
+          cashAccountId: data.cashAccountId,
           status:
             data.paidAmount >= data.totalAmount
               ? "PAID"

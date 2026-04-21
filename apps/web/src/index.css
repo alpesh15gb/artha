@@ -42,6 +42,12 @@ html {
   text-rendering: optimizeLegibility;
   font-size: 16px;
   scroll-behavior: smooth;
+  /* Safe area support for mobile */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -52,6 +58,7 @@ body {
   font-family: var(--font-sans);
   font-weight: 500;
   line-height: 1.6;
+  overscroll-behavior-y: none; /* native feel */
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -68,10 +75,10 @@ h1, h2, h3, h4, h5, h6 {
 @layer utilities {
   /* Glass morphism */
   .glass {
-    @apply bg-white/80 backdrop-blur-xl border border-white/60;
+    @apply bg-white border border-slate-100 md:bg-white/80 md:backdrop-blur-xl md:border-white/60;
   }
   .glass-heavy {
-    @apply bg-white/95 backdrop-blur-2xl border border-white/80 shadow-xl;
+    @apply bg-white border border-slate-200 shadow-xl md:bg-white/95 md:backdrop-blur-2xl md:border-white/80;
   }
 
   /* Text gradient */
