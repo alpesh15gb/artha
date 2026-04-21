@@ -223,7 +223,13 @@ async function importFromSqlite(db, businessId, importLogId) {
 
   try {
     console.log("Reading VYP tables...");
-    const items = db.prepare("SELECT * FROM kb_items").all();
+    let items = [];
+    try {
+      items = db.prepare("SELECT * FROM kb_items").all();
+    } catch (e) {
+      console.log("kb_items missing, trying 'items' table...");
+      try { items = db.prepare("SELECT * FROM items").all(); } catch(e2) {}
+    }
     const parties = db.prepare("SELECT * FROM kb_names").all();
     const transactions = db.prepare("SELECT * FROM kb_transactions").all();
     const lineItems = db.prepare("SELECT * FROM kb_lineitems").all();
@@ -439,11 +445,30 @@ async function importFromSqlite(db, businessId, importLogId) {
               itemId = itemByNameMap.get(vName.trim().toLowerCase());
             }
 
+            // AUTO-DISCOVERY: If item still not found, create it now!
+            if (!itemId && vName) {
+               try {
+                 const taxRate = li.li_tax_rate || li.taxRate || 18;
+                 const createdItem = await prisma.item.create({
+                   data: {
+                     businessId,
+                     name: vName,
+                     taxRate: safeFloat(taxRate),
+                     unit: li.li_unit || li.unit || "NOS",
+                     sellingPrice: safeFloat(li.priceperunit || li.pricePerUnit || 0),
+                   }
+                 });
+                 itemMap.set(vId, createdItem.id);
+                 itemByNameMap.set(vName.trim().toLowerCase(), createdItem.id);
+                 itemId = createdItem.id;
+               } catch (e) { console.log("Auto-Discovery item creation failed:", e.message); }
+            }
+
             // Description: use item name if linked, otherwise use lineitem_description
             let description = "";
             if (itemId) {
               // Item is linked - find its name
-              description = itemNameMap.get(vId) || vName || "";
+              description = vName || itemNameMap.get(vId) || "";
             } else {
               // No item linked - use free text description
               description = li.lineitem_description || li.li_description || vName || `Item #${vId}`;
