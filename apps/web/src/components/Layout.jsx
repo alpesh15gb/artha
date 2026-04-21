@@ -131,6 +131,10 @@ const NAV_GROUPS = [
       { path: "/import", label: "Import", icon: Upload },
     ],
   },
+  {
+    label: "Configuration",
+    items: [{ path: "/settings", label: "Settings", icon: Settings }],
+  },
 ];
 
 const QUICK_ACTIONS = [
@@ -462,6 +466,9 @@ function Layout({ children }) {
             <button className="p-2 text-slate-400 hover:text-indigo-600 relative">
               <Bell className="w-5 h-5" />
             </button>
+            <Link to="/settings" className="p-2 text-slate-400 hover:text-indigo-600 transition-colors">
+              <Settings className="w-5 h-5" />
+            </Link>
           </div>
         </header>
 

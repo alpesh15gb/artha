@@ -52,8 +52,15 @@ export default function DashboardScreen({ navigation }: any) {
   return (
     <ScrollView style={styles.container} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
       <View style={[styles.header, { backgroundColor: business?.settings?.themeColor || '#0284c7' }]}>
-        <Text style={styles.businessName}>{business?.name || 'Artha'}</Text>
-        <Text style={styles.welcome}>Welcome, {user?.name || 'User'}</Text>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.businessName}>{business?.name || 'Artha'}</Text>
+            <Text style={styles.welcome}>Welcome, {user?.name || 'User'}</Text>
+          </View>
+          <TouchableOpacity onPress={() => navigation.navigate('More', { screen: 'Settings' })}>
+            <Icon name="cog" size={28} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.statsGrid}>
@@ -130,7 +137,8 @@ export default function DashboardScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { padding: 20, backgroundColor: '#0284c7' },
+  header: { padding: 20, paddingTop: 40, backgroundColor: '#0284c7' },
+  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   businessName: { fontSize: 24, fontWeight: 'bold', color: '#fff' },
   welcome: { fontSize: 14, color: '#bae6fd', marginTop: 4 },
   statsGrid: { flexDirection: 'row', padding: 16, gap: 12 },

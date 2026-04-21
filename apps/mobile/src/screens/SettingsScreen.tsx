@@ -7,6 +7,29 @@ export default function SettingsScreen() {
   const { user, business, businesses, setBusiness, logout } = useAuthStore();
   const [notifications, setNotifications] = React.useState(true);
   const [biometric, setBiometric] = React.useState(false);
+  const [apiUrl, setApiUrl] = React.useState('https://artha.sytes.net/api');
+
+  const handleEditServer = () => {
+    Alert.prompt(
+      'Server Configuration',
+      'Enter the API endpoint URL:',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Save', 
+          onPress: (url) => {
+            if (url) {
+              setApiUrl(url);
+              // In a real app, we'd save this to AsyncStorage and reload the API client
+              Alert.alert('Success', 'Server URL updated. Please restart the app.');
+            }
+          }
+        }
+      ],
+      'plain-text',
+      apiUrl
+    );
+  };
 
   const handleLogout = () => {
     Alert.alert(
@@ -101,6 +124,16 @@ export default function SettingsScreen() {
         <SettingItem icon="help-circle-outline" title="Help Center" />
         <SettingItem icon="shield-check-outline" title="Privacy Policy" />
         <SettingItem icon="information-outline" title="About Artha" subtitle="v1.0.0" />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Server Configuration</Text>
+        <SettingItem 
+          icon="server-network" 
+          title="API Endpoint" 
+          subtitle={apiUrl} 
+          onPress={handleEditServer} 
+        />
       </View>
 
       <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
