@@ -178,8 +178,8 @@ function NavItem({ item, isCollapsed }) {
       className={cn(
         "relative flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group",
         isActive
-          ? "bg-indigo-600 text-white shadow-xl shadow-indigo-600/20"
-          : "text-slate-500 hover:bg-slate-50 hover:text-indigo-600",
+          ? "bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-lg shadow-indigo-900/40"
+          : "text-slate-400 hover:bg-white/5 hover:text-white",
         isCollapsed && "justify-center px-0",
       )}
     >
@@ -278,7 +278,7 @@ function Layout({ children }) {
       <motion.aside
         animate={{ width: isCollapsed ? 88 : 280 }}
         transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
-        className="hidden md:flex flex-col bg-white border-r border-slate-200 z-50 relative no-print shadow-[4px_0_24px_-10px_rgba(0,0,0,0.05)]"
+        className="hidden md:flex flex-col bg-[#0f172a] text-white z-50 relative no-print shadow-2xl"
       >
         {/* Brand */}
         <div
@@ -298,10 +298,10 @@ function Layout({ children }) {
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
               >
-                <h1 className="text-lg font-black text-slate-900 leading-none tracking-tighter uppercase">
+                <h1 className="text-lg font-black text-white leading-none tracking-tighter uppercase">
                   Artha
                 </h1>
-                <p className="text-[9px] font-black text-indigo-600 uppercase tracking-[0.3em] mt-1 opacity-70">
+                <p className="text-[9px] font-black text-indigo-400 uppercase tracking-[0.3em] mt-1 opacity-90">
                   Accounting
                 </p>
               </motion.div>
@@ -326,7 +326,7 @@ function Layout({ children }) {
                   const b = businesses.find((x) => x.id === e.target.value);
                   if (b) setCurrentBusiness(b);
                 }}
-                className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-11 pr-10 py-3 text-[11px] font-black text-slate-700 uppercase tracking-widest appearance-none focus:outline-none focus:ring-4 focus:ring-indigo-600/5 transition-all cursor-pointer"
+                className="w-full bg-slate-800/50 border border-slate-700/50 rounded-2xl pl-11 pr-10 py-3 text-[11px] font-black text-slate-200 uppercase tracking-widest appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer"
               >
                 {businesses.map((b) => (
                   <option key={b.id} value={b.id}>
@@ -366,20 +366,20 @@ function Layout({ children }) {
         <div className="p-5 border-t border-slate-100 mt-auto">
           <div
             className={cn(
-              "flex items-center gap-4 p-3 rounded-2xl hover:bg-slate-50 transition-all group cursor-pointer",
+              "flex items-center gap-4 p-3 rounded-2xl hover:bg-white/5 transition-all group cursor-pointer",
               isCollapsed && "justify-center",
             )}
           >
-            <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center font-black text-sm shadow-sm ring-2 ring-white">
+            <div className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center font-black text-sm shadow-lg shadow-indigo-900/40">
               {user?.name?.[0]?.toUpperCase()}
             </div>
             {!isCollapsed && (
               <>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-black text-slate-900 truncate uppercase tracking-tighter leading-none">
+                  <p className="text-xs font-black text-white truncate uppercase tracking-tighter leading-none">
                     {user?.name}
                   </p>
-                  <p className="text-[9px] font-bold text-slate-400 truncate mt-1.5 uppercase tracking-widest opacity-60">
+                  <p className="text-[9px] font-bold text-slate-400 truncate mt-1.5 uppercase tracking-widest opacity-80">
                     Operations
                   </p>
                 </div>
@@ -430,9 +430,9 @@ function Layout({ children }) {
             <div className="relative">
               <button
                 onClick={() => setShowQuickAdd(!showQuickAdd)}
-                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 md:px-5 py-2 md:py-2.5 rounded-2xl text-[10px] md:text-[11px] font-black uppercase tracking-widest shadow-xl shadow-indigo-600/20"
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-full text-[11px] font-black uppercase tracking-widest shadow-lg shadow-indigo-600/20 transition-all active:scale-95"
               >
-                <Plus className="w-4 h-4" /> <span className="hidden xs:inline">NEW</span>
+                <Plus className="w-4 h-4" /> <span className="hidden sm:inline">ADD NEW</span>
               </button>
               <AnimatePresence>
                 {showQuickAdd && (
