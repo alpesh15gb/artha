@@ -470,8 +470,8 @@ async function importFromSqlite(db, businessId, importLogId) {
             
             let itemId = itemMap.get(vId) || itemByNameMap.get(vName.trim().toLowerCase());
             
-            // Description: use item name if linked, otherwise use lineitem_description
-            const description = vName || li.lineitem_description || li.li_description || `Item #${vId}`;
+            // Description: use lineitem_description first, then item name as fallback
+            const description = li.lineitem_description || li.li_description || vName || "";
 
             // Handle both snake_case and camelCase column names from better-sqlite3
             const rate = safeFloat(li.priceperunit || li.pricePerUnit || li.li_rate || 0);
