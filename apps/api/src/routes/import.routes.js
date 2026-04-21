@@ -174,13 +174,29 @@ router.post("/purge", async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Business ID required" });
     }
 
+    // Delete in strict reverse-dependency order
     await prisma.$transaction([
+      // 1. Level 3 Dependencies (Adjustments & Line Items)
+      prisma.paymentAdjustment.deleteMany({ where: { payment: { businessId } } }),
       prisma.invoiceItem.deleteMany({ where: { invoice: { businessId } } }),
       prisma.purchaseItem.deleteMany({ where: { purchase: { businessId } } }),
+      prisma.estimateItem.deleteMany({ where: { estimate: { businessId } } }),
+      prisma.journalEntryLine.deleteMany({ where: { journalEntry: { businessId } } }),
+
+      // 2. Level 2 Dependencies (Parent Transactions/Events)
       prisma.invoice.deleteMany({ where: { businessId } }),
       prisma.purchase.deleteMany({ where: { businessId } }),
-      prisma.estimateItem.deleteMany({ where: { estimate: { businessId } } }),
       prisma.estimate.deleteMany({ where: { businessId } }),
+      prisma.payment.deleteMany({ where: { businessId } }),
+      prisma.receipt.deleteMany({ where: { businessId } }),
+      prisma.expense.deleteMany({ where: { businessId } }),
+      prisma.journalEntry.deleteMany({ where: { businessId } }),
+      prisma.transaction.deleteMany({ where: { businessId } }),
+      prisma.auditLog.deleteMany({ where: { businessId } }),
+      prisma.task.deleteMany({ where: { businessId } }),
+      prisma.complaint.deleteMany({ where: { businessId } }),
+
+      // 3. Level 1 Base Data (Entities & Accounts)
       prisma.cashAccount.deleteMany({ where: { businessId } }),
       prisma.bankAccount.deleteMany({ where: { businessId } }),
       prisma.party.deleteMany({ where: { businessId } }),
