@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,500&family=Outfit:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -8,9 +8,10 @@
    DESIGN SYSTEM TOKENS
    ============================================ */
 :root {
-  --font-sans: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
-  --color-brand: #4f46e5;
-  --color-brand-light: #6366f1;
+  --font-sans: 'Inter', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-header: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+  --color-brand: #6366f1;
+  --color-brand-light: #818cf8;
   --color-surface: #ffffff;
   --color-bg: #f8fafc;
   --color-border: #f1f5f9;
@@ -25,8 +26,8 @@
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.03);
   --shadow-lg: 0 10px 25px -3px rgb(0 0 0 / 0.04), 0 4px 6px -4px rgb(0 0 0 / 0.02);
   --shadow-xl: 0 25px 50px -12px rgb(0 0 0 / 0.05);
-  --shadow-brand: 0 10px 40px -10px rgba(79, 70, 229, 0.4);
-  --shadow-glow: 0 0 20px rgba(79, 70, 229, 0.15);
+  --shadow-brand: 0 10px 40px -10px rgba(99, 102, 241, 0.3);
+  --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.1);
 }
 
 /* ============================================
@@ -62,11 +63,11 @@ body {
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-sans);
-  letter-spacing: -0.025em;
-  font-weight: 800;
+  font-family: var(--font-header);
+  letter-spacing: -0.015em;
+  font-weight: 700;
   color: #0f172a;
-  line-height: 1.2;
+  line-height: 1.25;
 }
 
 /* ============================================
@@ -75,10 +76,10 @@ h1, h2, h3, h4, h5, h6 {
 @layer utilities {
   /* Glass morphism */
   .glass {
-    @apply bg-white border border-slate-100 md:bg-white/80 md:backdrop-blur-xl md:border-white/60;
+    @apply bg-white border border-slate-200/50 md:bg-white/70 md:backdrop-blur-xl md:border-white/40 shadow-xl shadow-black/5;
   }
   .glass-heavy {
-    @apply bg-white border border-slate-200 shadow-xl md:bg-white/95 md:backdrop-blur-2xl md:border-white/80;
+    @apply bg-white border border-slate-200 shadow-xl md:bg-white/90 md:backdrop-blur-2xl md:border-white/60;
   }
 
   /* Text gradient */
