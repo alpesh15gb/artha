@@ -323,15 +323,23 @@ async function importFromSqlite(db, businessId, importLogId) {
 
     // 2. Import PARTIES
     const partyMap = new Map();
+    // Build quick lookup for transaction types to optimize role discovery
+    const salesPartyIds = new Set(transactions.filter(t => [1, 4, 3, 27].includes(Number(t.txn_type))).map(t => String(t.txn_name_id)));
+    const purchasePartyIds = new Set(transactions.filter(t => [2, 5, 83].includes(Number(t.txn_type))).map(t => String(t.txn_name_id)));
+
     for (const party of parties) {
       try {
         // name_type: 1 = Party (Customer/Supplier), 2 = Expense/Income
         if (party.name_type === 2) continue;
+
+        const vyPartyId = String(party.name_id);
+        const hasSales = salesPartyIds.has(vyPartyId);
+        const hasPurchases = purchasePartyIds.has(vyPartyId);
         
-        // Determine party type:
-        // name_type=1 + name_customer_type=0 -> Customer (has purchase transactions)
-        // name_type=1 + name_customer_type=1 -> Supplier (has sales transactions - they are vendor)
-        let partyType = party.name_customer_type === 1 ? "SUPPLIER" : "CUSTOMER";
+        // Smart Role Discovery
+        let partyType = "CUSTOMER"; 
+        if (hasPurchases && !hasSales) partyType = "SUPPLIER";
+        else if (party.name_customer_type === 1 || party.name_vendor_type === 1) partyType = "SUPPLIER";
 
         // Parse address: multi-line with city, state, pincode
         const address = party.address || "";
