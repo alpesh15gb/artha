@@ -409,7 +409,36 @@ async function importFromSqlite(db, businessId, importLogId) {
       }
     }
 
-    // 3. Import TRANSACTIONS (Invoices / Purchases / Estimates)
+    // 3. PRE-PASS: Auto-Discover missing items before creating transactions
+    console.log("Pre-scanning for missing items...");
+    const missingNamesSet = new Set();
+    for (const li of lineItems) {
+      const vId = String(li.item_id || li.li_item_id || li.liItemId || "");
+      const vName = li.li_item_name || li.liItemName || li.lineitem_name || "";
+      if (vName && !itemMap.has(vId) && !itemByNameMap.has(vName.trim().toLowerCase())) {
+        missingNamesSet.add(vName.trim());
+      }
+    }
+
+    if (missingNamesSet.size > 0) {
+      console.log(`Auto-Discovering ${missingNamesSet.size} new items...`);
+      for (const name of missingNamesSet) {
+        try {
+          const newItem = await prisma.item.create({
+            data: {
+              businessId,
+              name,
+              taxRate: 18,
+              unit: "NOS",
+              sellingPrice: 0,
+            }
+          });
+          itemByNameMap.set(name.trim().toLowerCase(), newItem.id);
+        } catch (e) { console.log("Pre-pass item creation failed:", e.message); }
+      }
+    }
+
+    // 4. Import TRANSACTIONS (Invoices / Purchases / Estimates)
     const txToAccMap = new Map();
     for (const m of paymentMappings) {
       if (m.payment_id) txToAccMap.set(String(m.txn_id), m.payment_id);
@@ -431,48 +460,18 @@ async function importFromSqlite(db, businessId, importLogId) {
         const bankId = bankMap.get(pTypeId);
         const cashId = cashMap.get(pTypeId);
 
-        const invLineItems = lineItems
-          .filter((li) => String(li.lineitem_txn_id) === String(txn.txn_id))
-          .map((li) => {
+        const invLineItems = [];
+        const txnLineItemsRaw = lineItems.filter((li) => String(li.lineitem_txn_id) === String(txn.txn_id));
+
+        for (const li of txnLineItemsRaw) {
             // Enhanced Item Matching: By ID (multiple column check) or by Name
             const vId = String(li.item_id || li.li_item_id || li.liItemId || "");
             const vName = li.li_item_name || li.liItemName || li.lineitem_name || "";
             
-            let itemId = itemMap.get(vId);
+            let itemId = itemMap.get(vId) || itemByNameMap.get(vName.trim().toLowerCase());
             
-            // Fallback: Match by name if ID link fails
-            if (!itemId && vName) {
-              itemId = itemByNameMap.get(vName.trim().toLowerCase());
-            }
-
-            // AUTO-DISCOVERY: If item still not found, create it now!
-            if (!itemId && vName) {
-               try {
-                 const taxRate = li.li_tax_rate || li.taxRate || 18;
-                 const createdItem = await prisma.item.create({
-                   data: {
-                     businessId,
-                     name: vName,
-                     taxRate: safeFloat(taxRate),
-                     unit: li.li_unit || li.unit || "NOS",
-                     sellingPrice: safeFloat(li.priceperunit || li.pricePerUnit || 0),
-                   }
-                 });
-                 itemMap.set(vId, createdItem.id);
-                 itemByNameMap.set(vName.trim().toLowerCase(), createdItem.id);
-                 itemId = createdItem.id;
-               } catch (e) { console.log("Auto-Discovery item creation failed:", e.message); }
-            }
-
             // Description: use item name if linked, otherwise use lineitem_description
-            let description = "";
-            if (itemId) {
-              // Item is linked - find its name
-              description = vName || itemNameMap.get(vId) || "";
-            } else {
-              // No item linked - use free text description
-              description = li.lineitem_description || li.li_description || vName || `Item #${vId}`;
-            }
+            const description = vName || li.lineitem_description || li.li_description || `Item #${vId}`;
 
             // Handle both snake_case and camelCase column names from better-sqlite3
             const rate = safeFloat(li.priceperunit || li.pricePerUnit || li.li_rate || 0);
@@ -489,24 +488,22 @@ async function importFromSqlite(db, businessId, importLogId) {
             // Get tax rate from lineitem_tax_id instead of assuming 18%
             const taxRateId = li.lineitem_tax_id || li.lineitemTaxId || li.taxId || li.li_tax_id;
             const taxRate = taxRateId ? (taxRateMap.get(taxRateId) || 18) : 18;
-            const cgstRate = taxRate / 2;
-            const sgstRate = taxRate / 2;
             
-            return {
-              itemId: itemId,
+            invLineItems.push({
+              itemId: itemId || null,
               description: description,
               quantity: qty,
-              unit: "NOS",
+              unit: li.li_unit || li.unit || "NOS",
               rate,
               discountPercent: safeFloat(li.lineitem_discount_percent || li.discountPercent || 0),
               discountAmount: safeFloat(li.lineitem_discount_amount || li.discountAmount || 0),
               taxableAmount,
-              cgstRate, cgstAmount: lineTaxAmount / 2,
-              sgstRate, sgstAmount: lineTaxAmount / 2,
+              cgstRate: taxRate / 2, cgstAmount: lineTaxAmount / 2,
+              sgstRate: taxRate / 2, sgstAmount: lineTaxAmount / 2,
               totalAmount: taxableAmount + lineTaxAmount,
               hsnCode: li.lineitem_hsn_code || li.hsnCode || "",
-            };
-          });
+            });
+        }
 
         // Sum taxes from line items instead of using transaction-level tax
         const lineItemTaxes = invLineItems.reduce((sum, li) => sum + (li.cgstAmount + li.sgstAmount || 0), 0);
