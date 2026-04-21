@@ -170,7 +170,7 @@ export function InvoiceTemplate1({ invoice, business, party, items: rawItems = [
             <td className="border-r border-black text-center">{items.reduce((s, i) => s + i.quantity, 0)} {items[0]?.unit || 'PCS'}</td>
             <td className="border-r border-black"></td>
             <td className="border-r border-black"></td>
-            <td className="text-right px-1">{(totals?.subtotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+            <td className="text-right px-1">{(subtotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
           </tr>
         </tbody>
       </table>
@@ -196,8 +196,8 @@ export function InvoiceTemplate1({ invoice, business, party, items: rawItems = [
         </div>
         <div className="border-t border-black flex flex-col justify-between">
           <div className="divide-y divide-black border-b border-black">
-            <div className="flex justify-between px-1 py-0.5"><span>GST Total</span><span>{((totals?.cgst || 0) + (totals?.sgst || 0) || totals?.totalTax || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
-            <div className="flex justify-between px-1 py-0.5 font-bold bg-gray-100 italic"><span>Net Payable</span><span className="text-lg text-[#001a33]">₹ {(totals?.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
+            <div className="flex justify-between px-1 py-0.5"><span>GST Total</span><span>{((cgst || 0) + (sgst || 0) + (igst || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
+            <div className="flex justify-between px-1 py-0.5 font-bold bg-gray-100 italic"><span>Net Payable</span><span className="text-lg text-[#001a33]">₹ {(total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
           </div>
           <div className="p-2 flex gap-4 items-center">
             <div className="text-[10px] w-full">
@@ -235,7 +235,7 @@ export function InvoiceTemplate1({ invoice, business, party, items: rawItems = [
              <th className="border-r border-black font-normal">Amount</th>
              <th className="border-r border-black font-normal">Rate</th>
              <th className="border-r border-black font-normal">Amount</th>
-             <th className="font-normal font-bold">₹ {((totals?.cgst || 0) + (totals?.sgst || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</th>
+             <th className="font-normal font-bold">₹ {((cgst || 0) + (sgst || 0) + (igst || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</th>
           </tr>
         </thead>
         <tbody>
@@ -245,7 +245,7 @@ export function InvoiceTemplate1({ invoice, business, party, items: rawItems = [
             <td className="border-r border-black px-2 text-right">{(totals?.cgst || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
             <td className="border-r border-black"></td>
             <td className="border-r border-black px-2 text-right">{(totals?.sgst || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-            <td className="px-2 text-right">{((totals?.cgst || 0) + (totals?.sgst || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+            <td className="px-2 text-right">{((cgst || 0) + (sgst || 0) + (igst || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
           </tr>
         </tbody>
       </table>
