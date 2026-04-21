@@ -286,8 +286,11 @@ async function importFromSqlite(db, businessId, importLogId) {
     // 1. Import ITEMS
     const itemMap = new Map();
     const itemNameMap = new Map();
+    const itemByNameMap = new Map();
     for (const item of items) {
       try {
+        const vyId = String(item.item_id);
+        const name = item.item_name || "Unnamed Item";
         const taxRate = item.item_tax_id ? taxRateMap.get(item.item_tax_id) || 18 : 18;
         // Detect service: item_type=2 OR (no stock tracking AND no purchase price)
         const isService = item.item_type === 2 || (safeFloat(item.item_purchase_unit_price) === 0 && safeFloat(item.item_stock_quantity) === 0);
@@ -309,8 +312,9 @@ async function importFromSqlite(db, businessId, importLogId) {
             isActive: item.item_is_active !== 0,
           },
         });
-        itemMap.set(String(item.item_id), newItem.id);
-        itemNameMap.set(String(item.item_id), item.item_name);
+        itemMap.set(vyId, newItem.id);
+        itemNameMap.set(vyId, name);
+        itemByNameMap.set(name.trim().toLowerCase(), newItem.id);
         imported++;
       } catch (e) {
         failed++;
@@ -400,40 +404,45 @@ async function importFromSqlite(db, businessId, importLogId) {
         const invLineItems = lineItems
           .filter((li) => String(li.lineitem_txn_id) === String(txn.txn_id))
           .map((li) => {
-            const vyaparItemId = String(li.item_id);
-            let itemId = itemMap.get(vyaparItemId);
+            // Enhanced Item Matching: By ID (multiple column check) or by Name
+            const vId = String(li.item_id || li.li_item_id || li.liItemId || "");
+            const vName = li.li_item_name || li.liItemName || li.lineitem_name || "";
             
+            let itemId = itemMap.get(vId);
+            
+            // Fallback: Match by name if ID link fails
+            if (!itemId && vName) {
+              itemId = itemByNameMap.get(vName.trim().toLowerCase());
+            }
+
+            // Description: use item name if linked, otherwise use lineitem_description
+            let description = "";
+            if (itemId) {
+              // Item is linked - find its name
+              description = itemNameMap.get(vId) || vName || "";
+            } else {
+              // No item linked - use free text description
+              description = li.lineitem_description || li.li_description || vName || `Item #${vId}`;
+            }
+
             // Handle both snake_case and camelCase column names from better-sqlite3
-            const rate = safeFloat(li.priceperunit || li.pricePerUnit || 0);
-            const qty = safeFloat(li.quantity || li.qty || 1);
+            const rate = safeFloat(li.priceperunit || li.pricePerUnit || li.li_rate || 0);
+            const qty = safeFloat(li.quantity || li.qty || li.li_quantity || 1);
             const taxableAmount = rate * qty;
             const lineTaxAmount = safeFloat(
               li.lineitem_tax_amount || 
               li.lineitemTaxAmount || 
               li.taxAmount ||
+              li.li_tax_amount ||
               0
             );
             
             // Get tax rate from lineitem_tax_id instead of assuming 18%
-            const taxRateId = li.lineitem_tax_id || li.lineitemTaxId || li.taxId;
+            const taxRateId = li.lineitem_tax_id || li.lineitemTaxId || li.taxId || li.li_tax_id;
             const taxRate = taxRateId ? (taxRateMap.get(taxRateId) || 18) : 18;
             const cgstRate = taxRate / 2;
             const sgstRate = taxRate / 2;
             
-            // Description: use item name if linked to item, otherwise use lineitem_description
-            let description = "";
-            if (itemId) {
-              // Item is linked - use the imported item's name
-              description = itemNameMap.get(vyaparItemId) || "";
-            } else if (li.lineitem_description) {
-              // No item linked - use the free text description from lineitem
-              description = li.lineitem_description;
-            }
-            // If still empty, use a placeholder
-            if (!description) {
-              description = `Item #${vyaparItemId}`; // Fallback
-            }
-
             return {
               itemId: itemId,
               description: description,
